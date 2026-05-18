@@ -1,0 +1,2 @@
+class ThirdPartyAdapterService:
+    pass
