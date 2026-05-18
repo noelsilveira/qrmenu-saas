@@ -1,86 +1,103 @@
-# QR Menu SaaS Platform v2.0
+# QRMenu SaaS - Hostinger Deployment Guide
+## Server: srv1417349.hstgr.cloud | IP: 76.13.61.252
 
-## WhatsApp Acceptance • In-House Delivery • 3rd-Party Fleet • Driver App • Reconciliation
-
-### Quick Start
+## Quick Start (One Command)
 
 ```bash
-# 1. Clone and setup
-cd qrmenu_saas
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+# 1. SSH into your server
+ssh root@76.13.61.252
 
-# 2. Copy environment
+# 2. Download and run deploy script
+curl -fsSL https://raw.githubusercontent.com/noelsilveira/qrmenu-saas/main/deploy.sh | bash
+
+# 3. Edit .env file
+nano ~/qrmenu-saas/.env
+# Set SECRET_KEY and DB_PASSWORD
+
+# 4. Re-run deploy
+bash ~/qrmenu-saas/deploy.sh
+```
+
+## Manual Steps
+
+### Step 1: SSH into server
+```bash
+ssh root@76.13.61.252
+```
+
+### Step 2: Install Docker & Docker Compose
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+# Log out and back in
+```
+
+### Step 3: Clone repo
+```bash
+cd ~
+git clone https://github.com/noelsilveira/qrmenu-saas.git
+cd qrmenu-saas
+```
+
+### Step 4: Create .env
+```bash
 cp .env.example .env
-# Edit .env with your credentials
+nano .env
+```
+Fill in:
+- `SECRET_KEY` — generate with: `openssl rand -hex 32`
+- `DB_PASSWORD` — strong password
 
-# 3. Run with Docker Compose
-docker-compose up -d
-
-# 4. Run migrations
-alembic upgrade head
-
-# 5. Start development server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+### Step 5: Deploy
+```bash
+docker-compose -f docker-compose.prod.yml up -d --build
+sleep 10
+docker-compose -f docker-compose.prod.yml exec api alembic upgrade head
 ```
 
-### Project Structure
-
-```
-qrmenu_saas/
-├── app/
-│   ├── api/v1/endpoints/      # REST API endpoints
-│   ├── core/                  # Config, auth, middleware
-│   ├── db/                    # Database session, base class
-│   ├── models/                # SQLAlchemy ORM models
-│   ├── schemas/               # Pydantic request/response models
-│   ├── services/              # Business logic
-│   │   ├── delivery/          # Zone, pricing, assignment, tracking
-│   │   ├── whatsapp/            # Acceptance, notifications, analytics
-│   │   └── third_party/         # Talabat, Zomato, Jahez adapters
-│   ├── tasks/                 # Celery background jobs
-│   ├── utils/                 # Helpers, validators
-│   └── websocket/             # Socket.IO real-time manager
-├── alembic/                   # Database migrations
-├── tests/                     # Pytest test suite
-├── docker/                    # Docker configurations
-├── Dockerfile
-├── docker-compose.yml
-└── requirements.txt
+### Step 6: Verify
+```bash
+curl http://76.13.61.252/health
+# Should return: {"status":"healthy","version":"2.0.0"}
 ```
 
-### Key Features
+## Useful Commands
 
-- **Multi-Tenant**: Schema-per-tenant PostgreSQL with Row-Level Security
-- **WhatsApp Acceptance**: Interactive buttons for merchant order review
-- **Delivery Zones**: GeoJSON polygon editor with distance-based pricing
-- **Driver App**: React Native with GPS tracking, proof of delivery, earnings
-- **3rd Party**: Talabat, Zomato, Jahez adapters with fallback orchestration
-- **Reconciliation**: Auto-match orders with payouts, variance detection
-- **Real-Time**: WebSocket KDS, driver tracking, customer live map
-- **Smart Algorithms**: ETA prediction, route optimization (OR-Tools), demand forecasting
+```bash
+# View logs
+docker-compose -f docker-compose.prod.yml logs -f api
 
-### API Documentation
+# Restart API
+docker-compose -f docker-compose.prod.yml restart api
 
-Once running, visit: `http://localhost:8000/api/v1/docs`
+# Database shell
+docker-compose -f docker-compose.prod.yml exec db psql -U saas_user -d saas_db
 
-### WebSocket Endpoints
+# Redis CLI
+docker-compose -f docker-compose.prod.yml exec redis redis-cli
 
-- `/ws/kds?merchant_id={id}` — Kitchen Display System
-- `/ws/tracking?order_id={id}` — Customer delivery tracking
-- `/ws/driver?driver_id={id}` — Driver assignment notifications
-- `/ws/fleet?merchant_id={id}` — Fleet management live map
+# Update deployment
+cd ~/qrmenu-saas && git pull origin main
+docker-compose -f docker-compose.prod.yml up -d --build
+```
 
-### Celery Tasks
+## Adding a Custom Domain
 
-- `check_timeouts` — Every 60s, auto-accept/decline expired orders
-- `archive_locations` — Hourly, compress old GPS data
-- `run_nightly` — Daily 2 AM, reconciliation engine
+1. Point your domain A record to `76.13.61.252`
+2. Update `nginx/sites-available/qrmenu.conf`:
+   ```
+   server_name yourdomain.com www.yourdomain.com;
+   ```
+3. Get SSL:
+   ```bash
+   docker run -it --rm      -v certbot_data:/etc/letsencrypt      -v certbot_www:/var/www/certbot      certbot/certbot certonly --standalone -d yourdomain.com
+   ```
 
-### Environment Variables
+## Backup
 
-See `.env.example` for all required configuration.
-
----
-*Built with FastAPI, PostgreSQL, Redis, TimescaleDB, Socket.IO, Celery*
+```bash
+# Add to crontab for daily backups at 3 AM
+crontab -e
+# Add line:
+0 3 * * * /root/qrmenu-saas/backup.sh
+```
