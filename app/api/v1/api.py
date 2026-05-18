@@ -1,7 +1,10 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import auth, merchants, menu, orders, payments, \
-    whatsapp_acceptance, delivery_zones, drivers, third_party, reconciliation, reports
+from app.api.v1.endpoints import (
+    auth, merchants, menu, orders, payments,
+    whatsapp_acceptance, delivery_zones, drivers, third_party, reconciliation, reports,
+    business_hours, acceptance_settings,
+)
 
 api_router = APIRouter()
 
@@ -16,3 +19,5 @@ api_router.include_router(drivers.router, prefix="/drivers", tags=["Drivers"])
 api_router.include_router(third_party.router, prefix="/third-party", tags=["3rd Party"])
 api_router.include_router(reconciliation.router, prefix="/reconciliation", tags=["Reconciliation"])
 api_router.include_router(reports.router, prefix="/reports", tags=["Reports"])
+api_router.include_router(business_hours.router, prefix="/business-hours", tags=["Business Hours"])
+api_router.include_router(acceptance_settings.router, prefix="/acceptance-settings", tags=["Acceptance Settings"])

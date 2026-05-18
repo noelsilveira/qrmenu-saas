@@ -7,6 +7,12 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = "change-me-in-production"
 
+    # JWT
+    JWT_SECRET_KEY: str = "change-me-jwt-secret-key-min-32-chars"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
     # Database
     POSTGRES_URI: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/saas_db"
     POSTGRES_POOL_SIZE: int = 20
