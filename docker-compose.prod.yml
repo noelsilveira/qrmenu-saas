@@ -48,7 +48,7 @@ services:
     container_name: qrmenu-api
     restart: unless-stopped
     ports:
-      - "127.0.0.1:9001:8000"  # Localhost only, port 9000 internally mapped to 8000
+      - "127.0.0.1:9100:8000"  # Localhost only, port 9000 internally mapped to 8000
     environment:
       ENVIRONMENT: production
       DATABASE_URL: postgresql+asyncpg://qrmenu:${DB_PASSWORD}@qrmenu-db:5432/qrmenu_prod
