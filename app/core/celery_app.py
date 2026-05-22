@@ -15,8 +15,8 @@ celery_app = Celery("qrmenu")
 
 # Load configuration
 celery_app.config_from_object({
-    "broker_url": "redis://redis:6379/1",
-    "result_backend": "redis://redis:6379/2",
+    "broker_url": "redis://qrmenu-redis:6379/1",
+    "result_backend": "redis://qrmenu-redis:6379/2",
     "task_serializer": "json",
     "accept_content": ["json"],
     "result_serializer": "json",
