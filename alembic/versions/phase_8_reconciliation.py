@@ -16,7 +16,7 @@ dependencies = []
 
 
 def upgrade():
-    # Enum types
+    # Enum types - explicitly create first with checkfirst
     ledger_entry_type = sa.Enum('order_payment', 'platform_fee', 'delivery_fee', 'refund', 'payout', 'adjustment', 'tax', 'tip', name='ledger_entry_type')
     ledger_entry_status = sa.Enum('pending', 'confirmed', 'reconciled', 'disputed', 'written_off', name='ledger_entry_status')
     reconciliation_run_status = sa.Enum('pending', 'in_progress', 'completed', 'failed', 'partial', name='reconciliation_run_status')
@@ -37,6 +37,10 @@ def upgrade():
     op.add_column('orders', sa.Column('platform_connection_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('platform_connections.id'), nullable=True))
     op.add_column('orders', sa.Column('order_number', sa.String(), nullable=True))
 
+    # Helper: wrap enum so SQLAlchemy doesn't try to auto-create it again
+    def enum_col(enum_obj, **kw):
+        return postgresql.ENUM(*enum_obj.enums, name=enum_obj.name, create_type=False, **kw)
+
     # financial_ledger
     op.create_table(
         'financial_ledger',
@@ -45,8 +49,8 @@ def upgrade():
         sa.Column('order_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('orders.id'), nullable=True, index=True),
         sa.Column('platform_connection_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('platform_connections.id'), nullable=True, index=True),
         sa.Column('payout_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('payouts.id'), nullable=True, index=True),
-        sa.Column('entry_type', ledger_entry_type, nullable=False, index=True),
-        sa.Column('status', ledger_entry_status, default='pending', nullable=False),
+        sa.Column('entry_type', enum_col(ledger_entry_type), nullable=False, index=True),
+        sa.Column('status', enum_col(ledger_entry_status), default='pending', nullable=False),
         sa.Column('currency', sa.String(3), default='BHD', nullable=False),
         sa.Column('gross_amount', sa.Numeric(12, 4), nullable=False),
         sa.Column('fee_amount', sa.Numeric(12, 4), default=0.0),
@@ -70,7 +74,7 @@ def upgrade():
         sa.Column('platform_connection_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('platform_connections.id'), nullable=True),
         sa.Column('date_from', sa.DateTime(timezone=True), nullable=False),
         sa.Column('date_to', sa.DateTime(timezone=True), nullable=False),
-        sa.Column('status', reconciliation_run_status, default='pending'),
+        sa.Column('status', enum_col(reconciliation_run_status), default='pending'),
         sa.Column('total_orders_checked', sa.Integer, default=0),
         sa.Column('total_orders_matched', sa.Integer, default=0),
         sa.Column('total_discrepancies_found', sa.Integer, default=0),
@@ -91,8 +95,8 @@ def upgrade():
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
         sa.Column('merchant_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('merchants.id'), nullable=False, index=True),
         sa.Column('reconciliation_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('reconciliation_runs.id'), nullable=False, index=True),
-        sa.Column('discrepancy_type', discrepancy_type, nullable=False),
-        sa.Column('status', discrepancy_status, default='open'),
+        sa.Column('discrepancy_type', enum_col(discrepancy_type), nullable=False),
+        sa.Column('status', enum_col(discrepancy_status), default='open'),
         sa.Column('severity', sa.String(20), default='medium'),
         sa.Column('order_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('orders.id'), nullable=True),
         sa.Column('platform_order_id', sa.String(255), nullable=True),
@@ -121,7 +125,7 @@ def upgrade():
         sa.Column('platform_payout_id', sa.String(255), nullable=False, index=True),
         sa.Column('platform_period_start', sa.DateTime(timezone=True), nullable=True),
         sa.Column('platform_period_end', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('status', payout_status, default='expected'),
+        sa.Column('status', enum_col(payout_status), default='expected'),
         sa.Column('currency', sa.String(3), default='BHD', nullable=False),
         sa.Column('gross_sales', sa.Numeric(14, 4), default=0.0),
         sa.Column('total_fees', sa.Numeric(14, 4), default=0.0),
@@ -143,7 +147,7 @@ def upgrade():
         'settlement_reports',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
         sa.Column('merchant_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('merchants.id'), nullable=False, index=True),
-        sa.Column('report_type', report_type, default='daily'),
+        sa.Column('report_type', enum_col(report_type), default='daily'),
         sa.Column('period_start', sa.DateTime(timezone=True), nullable=False),
         sa.Column('period_end', sa.DateTime(timezone=True), nullable=False),
         sa.Column('platform_connection_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('platform_connections.id'), nullable=True),
