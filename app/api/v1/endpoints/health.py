@@ -33,7 +33,7 @@ async def health_check(db: AsyncSession = Depends(get_db)):
 
     # Redis check
     try:
-        redis_client = redis.from_url(os.getenv("REDIS_URI", "redis://localhost:6379")
+        redis_client = redis.from_url(os.getenv("REDIS_URI", "redis://localhost:6379"))
         await redis_client.ping()
         await redis_client.close()
         status["services"]["redis"] = {"status": "up"}
