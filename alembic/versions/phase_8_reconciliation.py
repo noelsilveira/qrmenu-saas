@@ -41,7 +41,56 @@ def upgrade():
     def enum_col(enum_obj, **kw):
         return postgresql.ENUM(*enum_obj.enums, name=enum_obj.name, create_type=False, **kw)
 
-    # financial_ledger
+    # reconciliation_runs (no deps on other new tables)
+    op.create_table(
+        'reconciliation_runs',
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
+        sa.Column('merchant_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('merchants.id'), nullable=False, index=True),
+        sa.Column('platform_connection_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('platform_connections.id'), nullable=True),
+        sa.Column('date_from', sa.DateTime(timezone=True), nullable=False),
+        sa.Column('date_to', sa.DateTime(timezone=True), nullable=False),
+        sa.Column('status', enum_col(reconciliation_run_status), default='pending'),
+        sa.Column('total_orders_checked', sa.Integer, default=0),
+        sa.Column('total_orders_matched', sa.Integer, default=0),
+        sa.Column('total_discrepancies_found', sa.Integer, default=0),
+        sa.Column('total_discrepancies_resolved', sa.Integer, default=0),
+        sa.Column('total_amount_checked', sa.Numeric(14, 4), default=0.0),
+        sa.Column('total_variance', sa.Numeric(14, 4), default=0.0),
+        sa.Column('started_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('completed_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('error_message', sa.Text, nullable=True),
+        sa.Column('triggered_by', sa.String(50), default='system'),
+        sa.Column('config_snapshot', postgresql.JSONB, default=dict),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
+    )
+
+    # payouts (no deps on other new tables)
+    op.create_table(
+        'payouts',
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
+        sa.Column('merchant_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('merchants.id'), nullable=False, index=True),
+        sa.Column('platform_connection_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('platform_connections.id'), nullable=False, index=True),
+        sa.Column('platform_payout_id', sa.String(255), nullable=False, index=True),
+        sa.Column('platform_period_start', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('platform_period_end', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('status', enum_col(payout_status), default='expected'),
+        sa.Column('currency', sa.String(3), default='BHD', nullable=False),
+        sa.Column('gross_sales', sa.Numeric(14, 4), default=0.0),
+        sa.Column('total_fees', sa.Numeric(14, 4), default=0.0),
+        sa.Column('total_refunds', sa.Numeric(14, 4), default=0.0),
+        sa.Column('total_adjustments', sa.Numeric(14, 4), default=0.0),
+        sa.Column('net_payout', sa.Numeric(14, 4), nullable=False),
+        sa.Column('breakdown', postgresql.JSONB, default=dict),
+        sa.Column('bank_reference', sa.String(255), nullable=True),
+        sa.Column('bank_account_last4', sa.String(4), nullable=True),
+        sa.Column('expected_date', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('sent_date', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('received_date', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), onupdate=sa.text('now()')),
+    )
+
+    # financial_ledger (depends on payouts, reconciliation_runs)
     op.create_table(
         'financial_ledger',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
@@ -66,30 +115,7 @@ def upgrade():
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), onupdate=sa.text('now()')),
     )
 
-    # reconciliation_runs
-    op.create_table(
-        'reconciliation_runs',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
-        sa.Column('merchant_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('merchants.id'), nullable=False, index=True),
-        sa.Column('platform_connection_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('platform_connections.id'), nullable=True),
-        sa.Column('date_from', sa.DateTime(timezone=True), nullable=False),
-        sa.Column('date_to', sa.DateTime(timezone=True), nullable=False),
-        sa.Column('status', enum_col(reconciliation_run_status), default='pending'),
-        sa.Column('total_orders_checked', sa.Integer, default=0),
-        sa.Column('total_orders_matched', sa.Integer, default=0),
-        sa.Column('total_discrepancies_found', sa.Integer, default=0),
-        sa.Column('total_discrepancies_resolved', sa.Integer, default=0),
-        sa.Column('total_amount_checked', sa.Numeric(14, 4), default=0.0),
-        sa.Column('total_variance', sa.Numeric(14, 4), default=0.0),
-        sa.Column('started_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('completed_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('error_message', sa.Text, nullable=True),
-        sa.Column('triggered_by', sa.String(50), default='system'),
-        sa.Column('config_snapshot', postgresql.JSONB, default=dict),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
-    )
-
-    # discrepancies
+    # discrepancies (depends on reconciliation_runs, payouts)
     op.create_table(
         'discrepancies',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
@@ -116,33 +142,7 @@ def upgrade():
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), onupdate=sa.text('now()')),
     )
 
-    # payouts
-    op.create_table(
-        'payouts',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
-        sa.Column('merchant_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('merchants.id'), nullable=False, index=True),
-        sa.Column('platform_connection_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('platform_connections.id'), nullable=False, index=True),
-        sa.Column('platform_payout_id', sa.String(255), nullable=False, index=True),
-        sa.Column('platform_period_start', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('platform_period_end', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('status', enum_col(payout_status), default='expected'),
-        sa.Column('currency', sa.String(3), default='BHD', nullable=False),
-        sa.Column('gross_sales', sa.Numeric(14, 4), default=0.0),
-        sa.Column('total_fees', sa.Numeric(14, 4), default=0.0),
-        sa.Column('total_refunds', sa.Numeric(14, 4), default=0.0),
-        sa.Column('total_adjustments', sa.Numeric(14, 4), default=0.0),
-        sa.Column('net_payout', sa.Numeric(14, 4), nullable=False),
-        sa.Column('breakdown', postgresql.JSONB, default=dict),
-        sa.Column('bank_reference', sa.String(255), nullable=True),
-        sa.Column('bank_account_last4', sa.String(4), nullable=True),
-        sa.Column('expected_date', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('sent_date', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('received_date', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), onupdate=sa.text('now()')),
-    )
-
-    # settlement_reports
+    # settlement_reports (no deps on other new tables)
     op.create_table(
         'settlement_reports',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
@@ -183,10 +183,10 @@ def downgrade():
     op.drop_index('ix_ledger_merchant_date', table_name='financial_ledger')
 
     op.drop_table('settlement_reports')
-    op.drop_table('payouts')
     op.drop_table('discrepancies')
-    op.drop_table('reconciliation_runs')
     op.drop_table('financial_ledger')
+    op.drop_table('payouts')
+    op.drop_table('reconciliation_runs')
 
     op.drop_column('orders', 'platform_connection_id')
     op.drop_column('orders', 'order_number')
