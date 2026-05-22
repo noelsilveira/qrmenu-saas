@@ -1,7 +1,9 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
     APP_NAME: str = "QRMenu SaaS"
     APP_VERSION: str = "2.0.0"
     API_V1_STR: str = "/api/v1"
@@ -47,8 +49,5 @@ class Settings(BaseSettings):
     S3_BUCKET: str = "qrmenu-assets"
 
     CORS_ORIGINS: List[str] = ["*"]
-
-    class Config:
-        env_file = ".env"
 
 settings = Settings()

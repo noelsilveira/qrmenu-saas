@@ -50,20 +50,16 @@ services:
     ports:
       - "127.0.0.1:9100:8000"  # Localhost only, port 9000 internally mapped to 8000
     environment:
-      ENVIRONMENT: production
-      DATABASE_URL: postgresql+asyncpg://qrmenu:${DB_PASSWORD}@qrmenu-db:5432/qrmenu_prod
-      REDIS_URL: redis://qrmenu-redis:6379/0
-      CELERY_BROKER_URL: redis://qrmenu-redis:6379/1
-      CELERY_RESULT_BACKEND: redis://qrmenu-redis:6379/2
       SECRET_KEY: ${SECRET_KEY}
-      ALGORITHM: HS256
-      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      JWT_SECRET_KEY: ${SECRET_KEY}
+      JWT_ALGORITHM: HS256
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      JWT_REFRESH_TOKEN_EXPIRE_DAYS: 7
+      POSTGRES_URI: postgresql+asyncpg://qrmenu:${DB_PASSWORD}@qrmenu-db:5432/qrmenu_prod
+      REDIS_URI: redis://qrmenu-redis:6379/0
+      REDIS_CELERY_URI: redis://qrmenu-redis:6379/1
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
-      WHATSAPP_API_KEY: ${WHATSAPP_API_KEY}
-      TALABAT_API_KEY: ${TALABAT_API_KEY}
-      ZOMATO_API_KEY: ${ZOMATO_API_KEY}
-      JAHEZ_API_KEY: ${JAHEZ_API_KEY}
     depends_on:
       qrmenu-db:
         condition: service_healthy
@@ -88,12 +84,11 @@ services:
     container_name: qrmenu-worker
     restart: unless-stopped
     environment:
-      ENVIRONMENT: production
-      DATABASE_URL: postgresql+asyncpg://qrmenu:${DB_PASSWORD}@qrmenu-db:5432/qrmenu_prod
-      REDIS_URL: redis://qrmenu-redis:6379/0
-      CELERY_BROKER_URL: redis://qrmenu-redis:6379/1
-      CELERY_RESULT_BACKEND: redis://qrmenu-redis:6379/2
       SECRET_KEY: ${SECRET_KEY}
+      JWT_SECRET_KEY: ${SECRET_KEY}
+      POSTGRES_URI: postgresql+asyncpg://qrmenu:${DB_PASSWORD}@qrmenu-db:5432/qrmenu_prod
+      REDIS_URI: redis://qrmenu-redis:6379/0
+      REDIS_CELERY_URI: redis://qrmenu-redis:6379/1
     depends_on:
       - qrmenu-db
       - qrmenu-redis
@@ -110,12 +105,11 @@ services:
     container_name: qrmenu-beat
     restart: unless-stopped
     environment:
-      ENVIRONMENT: production
-      DATABASE_URL: postgresql+asyncpg://qrmenu:${DB_PASSWORD}@qrmenu-db:5432/qrmenu_prod
-      REDIS_URL: redis://qrmenu-redis:6379/0
-      CELERY_BROKER_URL: redis://qrmenu-redis:6379/1
-      CELERY_RESULT_BACKEND: redis://qrmenu-redis:6379/2
       SECRET_KEY: ${SECRET_KEY}
+      JWT_SECRET_KEY: ${SECRET_KEY}
+      POSTGRES_URI: postgresql+asyncpg://qrmenu:${DB_PASSWORD}@qrmenu-db:5432/qrmenu_prod
+      REDIS_URI: redis://qrmenu-redis:6379/0
+      REDIS_CELERY_URI: redis://qrmenu-redis:6379/1
     depends_on:
       - qrmenu-db
       - qrmenu-redis
