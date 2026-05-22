@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qrmenu-celery-beat
+  namespace: qrmenu
+  labels:
+    app: qrmenu-celery-beat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qrmenu-celery-beat
+  template:
+    metadata:
+      labels:
+        app: qrmenu-celery-beat
+    spec:
+      containers:
+      - name: beat
+        image: qrmenu/api:latest
+        command: ["celery", "-A", "app.core.celery_app", "beat", "--loglevel=warning", "--scheduler", "django_celery_beat.schedulers:DatabaseScheduler"]
+        envFrom:
+        - configMapRef:
+            name: qrmenu-config
+        - secretRef:
+            name: qrmenu-secrets
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

@@ -1,71 +1,234 @@
+# ═══════════════════════════════════════════════════════════════
+# Phase 12 — Docker Compose
+# Local development + Production orchestration
+# ═══════════════════════════════════════════════════════════════
+
 version: "3.8"
 
+# ═══════════════════════════════════════════════════════════════
+# DEVELOPMENT PROFILE
+# ═══════════════════════════════════════════════════════════════
 services:
+  # ─── FastAPI Application ───────────────────────────────────
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: development
+    container_name: qrmenu-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - /app/__pycache__
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/qrmenu_dev
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - WHATSAPP_API_KEY=${WHATSAPP_API_KEY:-}
+      - TALABAT_API_KEY=${TALABAT_API_KEY:-}
+      - ZOMATO_API_KEY=${ZOMATO_API_KEY:-}
+      - JAHEZ_API_KEY=${JAHEZ_API_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - qrmenu-network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ─── PostgreSQL Database ────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    container_name: qrmenu-db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=qrmenu_dev
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./alembic/versions:/docker-entrypoint-initdb.d/migrations
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - qrmenu-network
+
+  # ─── Redis Cache + Message Broker ──────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: qrmenu-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - qrmenu-network
+
+  # ─── Celery Worker ─────────────────────────────────────────
+  celery-worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: development
+    container_name: qrmenu-celery-worker
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/qrmenu_dev
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - .:/app
+    networks:
+      - qrmenu-network
+    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=2
+
+  # ─── Celery Beat (Scheduler) ────────────────────────────────
+  celery-beat:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: development
+    container_name: qrmenu-celery-beat
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/qrmenu_dev
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - .:/app
+    networks:
+      - qrmenu-network
+    command: celery -A app.core.celery_app beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+
+  # ─── Flower (Celery Monitoring) ────────────────────────────
+  flower:
+    image: mher/flower:2.0
+    container_name: qrmenu-flower
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - FLOWER_PORT=5555
+    depends_on:
+      - redis
+    networks:
+      - qrmenu-network
+
+# ═══════════════════════════════════════════════════════════════
+# PRODUCTION PROFILE (docker-compose -f docker-compose.yml --profile prod up)
+# ═══════════════════════════════════════════════════════════════
+  api-prod:
+    profiles: ["prod"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: production
+    container_name: qrmenu-api-prod
     ports:
       - "8000:8000"
     environment:
-      - POSTGRES_URI=postgresql+asyncpg://postgres:postgres@db:5432/saas_db
-      - REDIS_URI=redis://redis:6379/0
-      - REDIS_CELERY_URI=redis://redis:6379/1
+      - ENVIRONMENT=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - WHATSAPP_API_KEY=${WHATSAPP_API_KEY}
+      - TALABAT_API_KEY=${TALABAT_API_KEY}
+      - ZOMATO_API_KEY=${ZOMATO_API_KEY}
+      - JAHEZ_API_KEY=${JAHEZ_API_KEY}
     depends_on:
       - db
       - redis
-      - osrm
-    volumes:
-      - .:/app
+    networks:
+      - qrmenu-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
 
-  db:
-    image: postgres:16
+  celery-worker-prod:
+    profiles: ["prod"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: production
+    container_name: qrmenu-celery-worker-prod
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=saas_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ENVIRONMENT=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+    depends_on:
+      - db
+      - redis
+    networks:
+      - qrmenu-network
+    restart: unless-stopped
+    command: celery -A app.core.celery_app worker --loglevel=warning --concurrency=4
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-
-  timescaledb:
-    image: timescale/timescaledb:latest-pg16
+  celery-beat-prod:
+    profiles: ["prod"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: production
+    container_name: qrmenu-celery-beat-prod
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=tracking
-    ports:
-      - "5433:5432"
-    volumes:
-      - timescale_data:/var/lib/postgresql/data
-
-  osrm:
-    image: osrm/osrm-backend:latest
-    ports:
-      - "5000:5000"
-    volumes:
-      - osrm_data:/data
-    command: osrm-routed /data/bahrain.osrm
-
-  celery_worker:
-    build: .
-    command: celery -A app.tasks.celery_app worker -l info -Q acceptance,delivery,reconciliation
+      - ENVIRONMENT=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
     depends_on:
-      - redis
       - db
-
-  celery_beat:
-    build: .
-    command: celery -A app.tasks.celery_app beat -l info
-    depends_on:
       - redis
-      - db
+    networks:
+      - qrmenu-network
+    restart: unless-stopped
+    command: celery -A app.core.celery_app beat --loglevel=warning --scheduler django_celery_beat.schedulers:DatabaseScheduler
 
+# ═══════════════════════════════════════════════════════════════
+# VOLUMES & NETWORKS
+# ═══════════════════════════════════════════════════════════════
 volumes:
   postgres_data:
-  timescale_data:
-  osrm_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  qrmenu-network:
+    driver: bridge

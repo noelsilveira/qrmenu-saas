@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0f0f0f">
+<title>KDS — Kitchen Display System</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0f0f0f;--card:#1a1a1a;--card-hover:#222;--border:#333;--text:#fff;--text-dim:#888;--green:#00d084;--yellow:#ffc107;--red:#ff4757;--blue:#3498db;--orange:#ff6b35;--prep-green:#2ecc71;--prep-yellow:#f39c12;--prep-red:#e74c3c}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif}
+body{background:var(--bg);color:var(--text);overflow:hidden;height:100vh}
+.kds{display:flex;flex-direction:column;height:100vh}
+
+/* Header */
+.kds-header{background:#141414;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
+.kds-brand{font-size:20px;font-weight:800;letter-spacing:-0.5px}
+.kds-stats{display:flex;gap:24px;align-items:center}
+.stat-item{text-align:center}
+.stat-value{font-size:28px;font-weight:700;line-height:1}
+.stat-label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px}
+.stat-value.green{color:var(--green)}
+.stat-value.yellow{color:var(--yellow)}
+.stat-value.red{color:var(--red)}
+.kds-clock{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}
+
+/* Filter Bar */
+.filter-bar{display:flex;gap:8px;padding:12px 24px;background:#141414;border-bottom:1px solid var(--border);overflow-x:auto}
+.filter-btn{padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-dim);font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;transition:all .2s}
+.filter-btn:hover,.filter-btn.active{background:var(--text);color:var(--bg);border-color:var(--text)}
+
+/* Orders Grid */
+.orders-container{flex:1;padding:20px 24px;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;align-content:start}
+
+/* Order Card */
+.order-card{background:var(--card);border-radius:16px;border:2px solid transparent;overflow:hidden;transition:all .3s;position:relative}
+.order-card:hover{border-color:var(--border)}
+.order-card.priority{border-color:var(--red)}
+.order-card.ready{border-color:var(--green)}
+.order-card.delayed{animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{border-color:var(--red)}50%{border-color:transparent}}
+
+.order-header{padding:16px 20px 12px;display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid var(--border)}
+.order-info{flex:1}
+.order-number{font-size:20px;font-weight:700;margin-bottom:4px}
+.order-meta{display:flex;gap:12px;font-size:12px;color:var(--text-dim)}
+.order-type{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;text-transform:uppercase}
+.type-delivery{background:var(--blue);color:#fff}
+.type-dinein{background:var(--green);color:#000}
+.type-takeaway{background:var(--orange);color:#fff}
+.order-timer{font-size:32px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
+.timer-green{color:var(--prep-green)}
+.timer-yellow{color:var(--prep-yellow)}
+.timer-red{color:var(--prep-red)}
+
+.order-body{padding:12px 20px}
+.order-item{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+.order-item:last-child{border-bottom:none}
+.item-qty{font-size:18px;font-weight:700;color:var(--text-dim);min-width:28px}
+.item-details{flex:1;padding:0 12px}
+.item-name{font-size:15px;font-weight:600}
+.item-mods{font-size:12px;color:var(--text-dim);margin-top:2px}
+.item-status{width:10px;height:10px;border-radius:50%;background:var(--text-dim);flex-shrink:0}
+.item-status.done{background:var(--green)}
+.item-status.prep{background:var(--yellow)}
+
+.order-footer{padding:12px 20px 16px;display:flex;gap:8px}
+.action-btn{flex:1;padding:14px;border-radius:12px;border:none;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;text-transform:uppercase;letter-spacing:0.5px}
+.action-btn:hover{transform:translateY(-2px)}
+.action-btn:active{transform:translateY(0)}
+.btn-start{background:var(--yellow);color:#000}
+.btn-ready{background:var(--green);color:#000}
+.btn-bump{background:var(--text);color:var(--bg)}
+.btn-served{background:var(--blue);color:#fff}
+
+/* Sound Toggle */
+.sound-toggle{position:fixed;top:16px;right:24px;z-index:100;background:var(--card);border:1px solid var(--border);width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px}
+
+/* Responsive */
+@media(max-width:768px){.orders-container{grid-template-columns:1fr}.kds-stats{gap:12px}.stat-value{font-size:20px}}
+</style>
+</head>
+<body>
+<div class="kds">
+  <header class="kds-header">
+    <div class="kds-brand">🖥️ KDS — Al Rabeeh Kitchen</div>
+    <div class="kds-stats">
+      <div class="stat-item">
+        <div class="stat-value green" id="statActive">5</div>
+        <div class="stat-label">Active</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value yellow" id="statPreparing">3</div>
+        <div class="stat-label">Preparing</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="statReady">1</div>
+        <div class="stat-label">Ready</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value red" id="statDelayed">1</div>
+        <div class="stat-label">Delayed</div>
+      </div>
+      <div class="kds-clock" id="clock">12:00:00</div>
+    </div>
+  </header>
+
+  <div class="filter-bar">
+    <button class="filter-btn active" onclick="filterOrders('all')">All Orders</button>
+    <button class="filter-btn" onclick="filterOrders('preparing')">Preparing</button>
+    <button class="filter-btn" onclick="filterOrders('ready')">Ready</button>
+    <button class="filter-btn" onclick="filterOrders('delivery')">Delivery</button>
+    <button class="filter-btn" onclick="filterOrders('dinein')">Dine-in</button>
+    <button class="filter-btn" style="color:var(--red)" onclick="filterOrders('delayed')">⚠️ Delayed</button>
+  </div>
+
+  <div class="orders-container" id="ordersContainer"></div>
+</div>
+
+<div class="sound-toggle" id="soundToggle" onclick="toggleSound()">🔊</div>
+
+<script>
+let soundEnabled = true;
+let orders = [
+  {id:'089',number:'ORD-089',type:'delivery',table:'—',customer:'Ahmed H.',items:[{name:'Grilled Chicken Burger',qty:2,mods:['Extra Cheese','No Onion'],status:'prep'},{name:'Fresh Orange Juice',qty:1,mods:[],status:'pending'}],status:'preparing',time:420,priority:false},
+  {id:'088',number:'ORD-088',type:'dinein',table:'T-12',customer:'Sarah A.',items:[{name:'Shawarma Platter',qty:1,mods:[],status:'prep'},{name:'Hummus & Pita',qty:1,mods:['Extra Pita'],status:'prep'}],status:'preparing',time:180,priority:false},
+  {id:'087',number:'ORD-087',type:'takeaway',table:'—',customer:'Mohammed F.',items:[{name:'Mixed Grill',qty:1,mods:['Spicy'],status:'done'},{name:'Caesar Salad',qty:1,mods:['Grilled Chicken'],status:'done'},{name:'Kunafa',qty:2,mods:[],status:'done'}],status:'ready',time:600,priority:false},
+  {id:'086',number:'ORD-086',type:'delivery',table:'—',customer:'Fatima K.',items:[{name:'Falafel Wrap',qty:3,mods:['Extra Tahini'],status:'prep'}],status:'preparing',time:900,priority:true},
+  {id:'085',number:'ORD-085',type:'dinein',table:'T-08',customer:'Omar J.',items:[{name:'Grilled Chicken Burger',qty:2,mods:[],status:'pending'},{name:'Caesar Salad',qty:1,mods:[],status:'pending'},{name:'Fresh Orange Juice',qty:2,mods:[],status:'pending'}],status:'preparing',time:60,priority:false}
+];
+
+function formatTime(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2,'0')}`;
+}
+
+function getTimerClass(seconds) {
+  if (seconds > 900) return 'timer-red';
+  if (seconds > 600) return 'timer-yellow';
+  return 'timer-green';
+}
+
+function renderOrders(filter = 'all') {
+  const container = document.getElementById('ordersContainer');
+  let filtered = orders;
+  if (filter === 'preparing') filtered = orders.filter(o => o.status === 'preparing');
+  if (filter === 'ready') filtered = orders.filter(o => o.status === 'ready');
+  if (filter === 'delivery') filtered = orders.filter(o => o.type === 'delivery');
+  if (filter === 'dinein') filtered = orders.filter(o => o.type === 'dinein');
+  if (filter === 'delayed') filtered = orders.filter(o => o.time > 600);
+
+  container.innerHTML = filtered.map(order => {
+    const timerClass = getTimerClass(order.time);
+    const isDelayed = order.time > 600;
+    const isReady = order.status === 'ready';
+    const typeClass = `type-${order.type}`;
+    const typeLabel = order.type === 'dinein' ? 'Dine-in' : order.type === 'delivery' ? 'Delivery' : 'Takeaway';
+
+    let actionBtn = '';
+    if (order.status === 'preparing') actionBtn = '<button class="action-btn btn-ready" onclick="markReady(''+order.id+'')">✓ Mark Ready</button>';
+    else if (order.status === 'ready') actionBtn = '<button class="action-btn btn-bump" onclick="bumpOrder(''+order.id+'')">👋 Bump</button>';
+
+    return `
+      <div class="order-card ${order.priority ? 'priority' : ''} ${isReady ? 'ready' : ''} ${isDelayed ? 'delayed' : ''}">
+        <div class="order-header">
+          <div class="order-info">
+            <div class="order-number">#${order.number}</div>
+            <div class="order-meta">
+              <span class="order-type ${typeClass}">${typeLabel}</span>
+              <span>${order.table !== '—' ? '🪑 ' + order.table : ''}</span>
+              <span>👤 ${order.customer}</span>
+            </div>
+          </div>
+          <div class="order-timer ${timerClass}">${formatTime(order.time)}</div>
+        </div>
+        <div class="order-body">
+          ${order.items.map(item => `
+            <div class="order-item">
+              <span class="item-qty">${item.qty}×</span>
+              <div class="item-details">
+                <div class="item-name">${item.name}</div>
+                ${item.mods.length ? `<div class="item-mods">${item.mods.join(' • ')}</div>` : ''}
+              </div>
+              <div class="item-status ${item.status === 'done' ? 'done' : item.status === 'prep' ? 'prep' : ''}"></div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="order-footer">
+          ${actionBtn}
+          <button class="action-btn btn-served" onclick="showDetails('${order.id}')">ℹ Details</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  updateStats();
+}
+
+function updateStats() {
+  document.getElementById('statActive').textContent = orders.filter(o => o.status !== 'served').length;
+  document.getElementById('statPreparing').textContent = orders.filter(o => o.status === 'preparing').length;
+  document.getElementById('statReady').textContent = orders.filter(o => o.status === 'ready').length;
+  document.getElementById('statDelayed').textContent = orders.filter(o => o.time > 600).length;
+}
+
+function markReady(id) {
+  const order = orders.find(o => o.id === id);
+  if (order) {
+    order.status = 'ready';
+    if (soundEnabled) playSound('ready');
+    renderOrders();
+  }
+}
+
+function bumpOrder(id) {
+  orders = orders.filter(o => o.id !== id);
+  if (soundEnabled) playSound('bump');
+  renderOrders();
+}
+
+function showDetails(id) {
+  const order = orders.find(o => o.id === id);
+  alert(`Order ${order.number}\nCustomer: ${order.customer}\nType: ${order.type}\nTime: ${formatTime(order.time)}\nItems: ${order.items.length}`);
+}
+
+function filterOrders(type) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  renderOrders(type);
+}
+
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  document.getElementById('soundToggle').textContent = soundEnabled ? '🔊' : '🔇';
+}
+
+function playSound(type) {
+  // In production, use Audio() with actual sound files
+  console.log('Playing sound:', type);
+}
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('en-US', {hour12:false});
+}
+
+// Timer tick
+setInterval(() => {
+  orders.forEach(o => { if (o.status !== 'served') o.time += 1; });
+  renderOrders();
+}, 1000);
+
+setInterval(updateClock, 1000);
+
+// WebSocket simulation (replace with real WS in production)
+function connectWebSocket() {
+  // const ws = new WebSocket('ws://localhost:8000/api/v1/ws/kds/MERCHANT_ID');
+  // ws.onmessage = (event) => {
+  //   const msg = JSON.parse(event.data);
+  //   if (msg.type === 'order:new') orders.push(msg.payload.order);
+  //   if (msg.type === 'order:status_change') {
+  //     const o = orders.find(o => o.id === msg.payload.order_id);
+  //     if (o) o.status = msg.payload.new_status;
+  //   }
+  //   renderOrders();
+  // };
+}
+
+renderOrders();
+updateClock();
+</script>
+</body>
+</html>

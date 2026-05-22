@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: qrmenu-api
+  namespace: qrmenu
+spec:
+  selector:
+    app: qrmenu-api
+  ports:
+  - port: 80
+    targetPort: 8000
+    name: http
+  type: ClusterIP

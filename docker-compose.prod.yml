@@ -1,149 +1,135 @@
 version: "3.8"
 
 services:
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: qrmenu_api
+  # ─── PostgreSQL ────────────────────────────────────────────
+  qrmenu-db:
+    image: postgres:15-alpine
+    container_name: qrmenu-db
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:5433:5432"  # Localhost only, port 5433 to avoid conflict
     environment:
-      - APP_NAME=QRMenu SaaS
-      - APP_VERSION=2.0.0
-      - API_V1_STR=/api/v1
-      - SECRET_KEY=${SECRET_KEY}
-      - POSTGRES_URI=postgresql+asyncpg://saas_user:${DB_PASSWORD}@db:5432/saas_db
-      - POSTGRES_POOL_SIZE=20
-      - POSTGRES_MAX_OVERFLOW=40
-      - REDIS_URI=redis://redis:6379/0
-      - REDIS_CELERY_URI=redis://redis:6379/1
-      - META_WA_ACCESS_TOKEN=${META_WA_ACCESS_TOKEN}
-      - META_WA_PHONE_NUMBER_ID=${META_WA_PHONE_NUMBER_ID}
-      - META_WA_BUSINESS_ACCOUNT_ID=${META_WA_BUSINESS_ACCOUNT_ID}
-      - META_WA_WEBHOOK_VERIFY_TOKEN=${META_WA_WEBHOOK_VERIFY_TOKEN}
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
-      - S3_ENDPOINT=${S3_ENDPOINT}
-      - S3_BUCKET=${S3_BUCKET}
-      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
-      - S3_SECRET_KEY=${S3_SECRET_KEY}
-      - CORS_ORIGINS=${CORS_ORIGINS}
-    depends_on:
-      - db
-      - redis
+      POSTGRES_USER: qrmenu
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: qrmenu_prod
     volumes:
-      - ./app:/app/app
+      - qrmenu_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qrmenu"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
-      - qrmenu_network
+      - qrmenu-network
 
-  db:
-    image: postgres:16-alpine
-    container_name: qrmenu_db
-    restart: unless-stopped
-    environment:
-      - POSTGRES_USER=saas_user
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=saas_db
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "127.0.0.1:5432:5432"
-    networks:
-      - qrmenu_network
-    command: >
-      postgres
-      -c shared_buffers=256MB
-      -c effective_cache_size=768MB
-      -c maintenance_work_mem=64MB
-      -c wal_buffers=16MB
-      -c default_statistics_target=100
-      -c random_page_cost=1.1
-      -c effective_io_concurrency=200
-      -c work_mem=8MB
-      -c min_wal_size=1GB
-      -c max_wal_size=4GB
-
-  redis:
+  # ─── Redis ──────────────────────────────────────────────────
+  qrmenu-redis:
     image: redis:7-alpine
-    container_name: qrmenu_redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
-    volumes:
-      - redis_data:/data
-    ports:
-      - "127.0.0.1:6379:6379"
-    networks:
-      - qrmenu_network
-
-  celery_worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: qrmenu_celery_worker
-    restart: unless-stopped
-    command: celery -A app.tasks.celery_app worker -l info -Q acceptance,delivery,reconciliation -c 4
-    environment:
-      - POSTGRES_URI=postgresql+asyncpg://saas_user:${DB_PASSWORD}@db:5432/saas_db
-      - REDIS_CELERY_URI=redis://redis:6379/1
-      - SECRET_KEY=${SECRET_KEY}
-    depends_on:
-      - db
-      - redis
-    networks:
-      - qrmenu_network
-
-  celery_beat:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: qrmenu_celery_beat
-    restart: unless-stopped
-    command: celery -A app.tasks.celery_app beat -l info
-    environment:
-      - POSTGRES_URI=postgresql+asyncpg://saas_user:${DB_PASSWORD}@db:5432/saas_db
-      - REDIS_CELERY_URI=redis://redis:6379/1
-      - SECRET_KEY=${SECRET_KEY}
-    depends_on:
-      - db
-      - redis
-    networks:
-      - qrmenu_network
-
-  nginx:
-    image: nginx:alpine
-    container_name: qrmenu_nginx
+    container_name: qrmenu-redis
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "127.0.0.1:6380:6379"  # Localhost only, port 6380
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/sites-available:/etc/nginx/conf.d:ro
-      - certbot_data:/etc/letsencrypt
-      - certbot_www:/var/www/certbot
-    depends_on:
-      - api
+      - qrmenu_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
-      - qrmenu_network
+      - qrmenu-network
 
-  certbot:
-    image: certbot/certbot
-    container_name: qrmenu_certbot
+  # ─── FastAPI Application ───────────────────────────────────
+  qrmenu-api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: production
+    container_name: qrmenu-api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9000:8000"  # Localhost only, port 9000 internally mapped to 8000
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://qrmenu:${DB_PASSWORD}@qrmenu-db:5432/qrmenu_prod
+      REDIS_URL: redis://qrmenu-redis:6379/0
+      CELERY_BROKER_URL: redis://qrmenu-redis:6379/1
+      CELERY_RESULT_BACKEND: redis://qrmenu-redis:6379/2
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      WHATSAPP_API_KEY: ${WHATSAPP_API_KEY}
+      TALABAT_API_KEY: ${TALABAT_API_KEY}
+      ZOMATO_API_KEY: ${ZOMATO_API_KEY}
+      JAHEZ_API_KEY: ${JAHEZ_API_KEY}
+    depends_on:
+      qrmenu-db:
+        condition: service_healthy
+      qrmenu-redis:
+        condition: service_healthy
     volumes:
-      - certbot_data:/etc/letsencrypt
-      - certbot_www:/var/www/certbot
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h; done'"
+      - ./static:/app/static:ro
     networks:
-      - qrmenu_network
+      - qrmenu-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1G
+
+  # ─── Celery Worker ──────────────────────────────────────────
+  qrmenu-worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: production
+    container_name: qrmenu-worker
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://qrmenu:${DB_PASSWORD}@qrmenu-db:5432/qrmenu_prod
+      REDIS_URL: redis://qrmenu-redis:6379/0
+      CELERY_BROKER_URL: redis://qrmenu-redis:6379/1
+      CELERY_RESULT_BACKEND: redis://qrmenu-redis:6379/2
+      SECRET_KEY: ${SECRET_KEY}
+    depends_on:
+      - qrmenu-db
+      - qrmenu-redis
+    networks:
+      - qrmenu-network
+    command: celery -A app.core.celery_app worker --loglevel=warning --concurrency=2
+
+  # ─── Celery Beat ────────────────────────────────────────────
+  qrmenu-beat:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: production
+    container_name: qrmenu-beat
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://qrmenu:${DB_PASSWORD}@qrmenu-db:5432/qrmenu_prod
+      REDIS_URL: redis://qrmenu-redis:6379/0
+      CELERY_BROKER_URL: redis://qrmenu-redis:6379/1
+      CELERY_RESULT_BACKEND: redis://qrmenu-redis:6379/2
+      SECRET_KEY: ${SECRET_KEY}
+    depends_on:
+      - qrmenu-db
+      - qrmenu-redis
+    networks:
+      - qrmenu-network
+    command: celery -A app.core.celery_app beat --loglevel=warning --scheduler django_celery_beat.schedulers:DatabaseScheduler
 
 volumes:
-  postgres_data:
-  redis_data:
-  certbot_data:
-  certbot_www:
+  qrmenu_postgres_data:
+    driver: local
+  qrmenu_redis_data:
+    driver: local
 
 networks:
-  qrmenu_network:
+  qrmenu-network:
     driver: bridge
+    name: qrmenu-network

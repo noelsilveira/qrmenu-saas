@@ -29,6 +29,7 @@ class OrderTypeEnum(PyEnum):
     dine_in = "dine_in"
     drive_in = "drive_in"
     pickup = "pickup"
+    takeaway = "takeaway"
     delivery = "delivery"
     web = "web"
 
@@ -39,8 +40,14 @@ class OrderStatus(PyEnum):
     PREPARING = "PREPARING"
     READY = "READY"
     SERVED = "SERVED"
+    OUT_FOR_DELIVERY = "OUT_FOR_DELIVERY"
+    DELIVERED = "DELIVERED"
     CANCELLED = "CANCELLED"
     REFUNDED = "REFUNDED"
+
+
+# Alias for Phase 9 compatibility
+OrderStatusEnum = OrderStatus
 
 
 class DeliveryType(PyEnum):
@@ -170,6 +177,68 @@ class AuthType(PyEnum):
     api_key = "api_key"
     oauth2 = "oauth2"
     basic = "basic"
+
+
+class LedgerEntryType(str, PyEnum):
+    ORDER_PAYMENT = "order_payment"
+    PLATFORM_FEE = "platform_fee"
+    DELIVERY_FEE = "delivery_fee"
+    REFUND = "refund"
+    PAYOUT = "payout"
+    ADJUSTMENT = "adjustment"
+    TAX = "tax"
+    TIP = "tip"
+
+
+class LedgerEntryStatus(str, PyEnum):
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    RECONCILED = "reconciled"
+    DISPUTED = "disputed"
+    WRITTEN_OFF = "written_off"
+
+
+class ReconciliationRunStatus(str, PyEnum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    PARTIAL = "partial"
+
+
+class DiscrepancyType(str, PyEnum):
+    MISSING_ORDER = "missing_order"
+    ORPHAN_ORDER = "orphan_order"
+    AMOUNT_MISMATCH = "amount_mismatch"
+    FEE_MISMATCH = "fee_mismatch"
+    DUPLICATE_PAYOUT = "duplicate_payout"
+    MISSING_PAYOUT = "missing_payout"
+    TAX_MISMATCH = "tax_mismatch"
+    STATUS_MISMATCH = "status_mismatch"
+
+
+class DiscrepancyStatus(str, PyEnum):
+    OPEN = "open"
+    UNDER_REVIEW = "under_review"
+    RESOLVED = "resolved"
+    ESCALATED = "escalated"
+    IGNORED = "ignored"
+
+
+class PayoutStatus(str, PyEnum):
+    EXPECTED = "expected"
+    SCHEDULED = "scheduled"
+    IN_TRANSIT = "in_transit"
+    RECEIVED = "received"
+    FAILED = "failed"
+    DISPUTED = "disputed"
+
+
+class ReportType(str, PyEnum):
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+    CUSTOM = "custom"
 
 
 # ---------------------------------------------------------------------------
@@ -378,6 +447,7 @@ class Table(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     merchant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    branch_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     location_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("locations.id"))
     table_number: Mapped[str] = mapped_column(String, nullable=False)
     seating_capacity: Mapped[int] = mapped_column(Integer, default=2)
@@ -424,6 +494,7 @@ class Order(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     merchant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    branch_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     location_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("locations.id"))
     customer_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("customers.id"))
     customer_phone: Mapped[Optional[str]] = mapped_column(String)
@@ -443,10 +514,20 @@ class Order(Base):
     payment_status: Mapped[str] = mapped_column(String, default="pending")
     whatsapp_notified: Mapped[bool] = mapped_column(Boolean, default=False)
     kitchen_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     ready_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     served_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    picked_up_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    priority: Mapped[int] = mapped_column(Integer, default=0)
+    promised_delivery_time: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    assigned_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    estimated_pickup_time: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    delivery_notes: Mapped[Optional[str]] = mapped_column(String)
+    driver_name: Mapped[Optional[str]] = mapped_column(String)
+    table_number: Mapped[Optional[str]] = mapped_column(String)
 
     # Delivery v2.0
     delivery_type: Mapped[Optional[DeliveryType]] = mapped_column(Enum(DeliveryType))
@@ -472,6 +553,20 @@ class Order(Base):
     is_scheduled: Mapped[bool] = mapped_column(Boolean, default=False)
     scheduled_for: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
+    # Phase 4 — Cart / Checkout
+    session_token: Mapped[Optional[str]] = mapped_column(String)
+    payment_method: Mapped[Optional[str]] = mapped_column(String)
+    estimated_ready_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+
+    # Phase 7 — 3rd Party Integration
+    external_order_id: Mapped[Optional[str]] = mapped_column(String)
+    delivery_address: Mapped[Optional[dict]] = mapped_column(JSONB)
+
+    platform_connection_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("platform_connections.id"))
+    order_number: Mapped[Optional[str]] = mapped_column(String)
+
+    ledger_entries = relationship("FinancialLedger", back_populates="order")
+
 
 class OrderItem(Base):
     __tablename__ = "order_items"
@@ -487,7 +582,26 @@ class OrderItem(Base):
     special_instructions: Mapped[Optional[str]] = mapped_column(String)
     kitchen_station: Mapped[Optional[str]] = mapped_column(String)
     prep_status: Mapped[str] = mapped_column(String, default="pending")
+    prep_time_min: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class PaymentTransaction(Base):
+    __tablename__ = "payment_transactions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
+    merchant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("merchants.id"), nullable=False)
+    method: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, default="pending")
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
+    currency: Mapped[str] = mapped_column(String, default="BHD")
+    provider_ref: Mapped[Optional[str]] = mapped_column(String)
+    provider_response: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    failure_reason: Mapped[Optional[str]] = mapped_column(Text)
+    refunded_amount: Mapped[Decimal] = mapped_column(Numeric(12, 3), default=Decimal("0.000"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class OrderStatusLog(Base):
@@ -593,11 +707,18 @@ class DeliveryZone(Base):
     merchant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
     boundary: Mapped[Optional[dict]] = mapped_column(JSONB)  # GeoJSON Polygon
+    boundaries: Mapped[Optional[list]] = mapped_column(JSONB)  # [{lat, lng}, ...]
     center_lat: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 8))
     center_lng: Mapped[Optional[Decimal]] = mapped_column(Numeric(11, 8))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     estimated_prep_min: Mapped[int] = mapped_column(Integer, default=20)
+    estimated_delivery_min: Mapped[int] = mapped_column(Integer, default=30)
+    base_fee: Mapped[Decimal] = mapped_column(Numeric(10, 3), default=Decimal("1.000"))
+    per_km_fee: Mapped[Decimal] = mapped_column(Numeric(10, 3), default=Decimal("0.500"))
+    min_order_value: Mapped[Decimal] = mapped_column(Numeric(10, 3), default=Decimal("5.000"))
+    free_delivery_threshold: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 3))
+    max_delivery_distance_km: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("15.0"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -666,10 +787,11 @@ class Driver(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     merchant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    phone: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    phone: Mapped[str] = mapped_column(String, nullable=False)
     email: Mapped[Optional[str]] = mapped_column(String)
-    first_name: Mapped[str] = mapped_column(String, nullable=False)
-    last_name: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[Optional[str]] = mapped_column(String)
+    first_name: Mapped[Optional[str]] = mapped_column(String)
+    last_name: Mapped[Optional[str]] = mapped_column(String)
     password_hash: Mapped[Optional[str]] = mapped_column(String)
     avatar_url: Mapped[Optional[str]] = mapped_column(String)
     license_number: Mapped[Optional[str]] = mapped_column(String)
@@ -679,6 +801,13 @@ class Driver(Base):
     vehicle_color: Mapped[Optional[str]] = mapped_column(String)
     insurance_doc_url: Mapped[Optional[str]] = mapped_column(String)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    status: Mapped[Optional[str]] = mapped_column(String, default="available")
+    current_lat: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 8))
+    current_lng: Mapped[Optional[Decimal]] = mapped_column(Numeric(11, 8))
+    last_location_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    battery_level: Mapped[Optional[int]] = mapped_column(Integer)
+    current_order_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    max_orders_per_run: Mapped[int] = mapped_column(Integer, default=3)
     rating: Mapped[Decimal] = mapped_column(Numeric(2, 1), default=Decimal("5.0"))
     total_deliveries: Mapped[int] = mapped_column(Integer, default=0)
     total_earnings: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"))
@@ -751,6 +880,17 @@ class DeliveryAssignment(Base):
     merchant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     zone_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("delivery_zones.id"))
     assignment_type: Mapped[AssignmentType] = mapped_column(Enum(AssignmentType), default=AssignmentType.auto)
+    status: Mapped[Optional[str]] = mapped_column(String, default="pending")
+    driver_name: Mapped[Optional[str]] = mapped_column(String)
+    pickup_address: Mapped[Optional[dict]] = mapped_column(JSONB)
+    delivery_address: Mapped[Optional[dict]] = mapped_column(JSONB)
+    estimated_pickup_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    estimated_delivery_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    actual_pickup_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    actual_delivery_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    delivery_fee: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), default=Decimal("0.00"))
+    distance_km: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    notes: Mapped[Optional[str]] = mapped_column(Text)
     assigned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     rejected_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
@@ -950,6 +1090,27 @@ class Settlement(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class PlatformConnection(Base):
+    __tablename__ = "platform_connections"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    merchant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("merchants.id"), nullable=False)
+    platform: Mapped[str] = mapped_column(String, nullable=False)
+    merchant_ref: Mapped[str] = mapped_column(String, nullable=False)
+    api_key: Mapped[Optional[str]] = mapped_column(String)
+    api_secret: Mapped[Optional[str]] = mapped_column(String)
+    webhook_secret: Mapped[Optional[str]] = mapped_column(String)
+    branch_id: Mapped[Optional[str]] = mapped_column(String)
+    status: Mapped[str] = mapped_column(String, default="active")
+    last_sync_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    last_error: Mapped[Optional[str]] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    ledger_entries = relationship("FinancialLedger", back_populates="platform_connection")
+    payouts = relationship("Payout", back_populates="platform_connection")
+
+
 class TaxRate(Base):
     __tablename__ = "tax_rates"
 
@@ -961,3 +1122,155 @@ class TaxRate(Base):
     applies_to: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class FinancialLedger(Base):
+    __tablename__ = "financial_ledger"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    merchant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("merchants.id"), nullable=False, index=True)
+    order_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True, index=True)
+    platform_connection_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("platform_connections.id"), nullable=True, index=True)
+    payout_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("payouts.id"), nullable=True, index=True)
+    entry_type: Mapped[LedgerEntryType] = mapped_column(Enum(LedgerEntryType), nullable=False, index=True)
+    status: Mapped[LedgerEntryStatus] = mapped_column(Enum(LedgerEntryStatus), default=LedgerEntryStatus.PENDING, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="BHD", nullable=False)
+    gross_amount: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
+    fee_amount: Mapped[Decimal] = mapped_column(Numeric(12, 4), default=Decimal("0.0000"))
+    tax_amount: Mapped[Decimal] = mapped_column(Numeric(12, 4), default=Decimal("0.0000"))
+    net_amount: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
+    platform_reference: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    platform_order_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    meta_data: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    reconciliation_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("reconciliation_runs.id"), nullable=True)
+    transaction_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    order = relationship("Order", back_populates="ledger_entries")
+    platform_connection = relationship("PlatformConnection", back_populates="ledger_entries")
+    payout = relationship("Payout", back_populates="ledger_entries")
+    reconciliation_run = relationship("ReconciliationRun", back_populates="ledger_entries")
+
+
+# Pydantic compatibility: schema expects 'metadata', model stores 'meta_data'
+class _MetadataProxy:
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return Base.metadata
+        return obj.meta_data
+    def __set__(self, obj, value):
+        obj.meta_data = value
+
+FinancialLedger.metadata = _MetadataProxy()
+
+
+class ReconciliationRun(Base):
+    __tablename__ = "reconciliation_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    merchant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("merchants.id"), nullable=False, index=True)
+    platform_connection_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("platform_connections.id"), nullable=True)
+    date_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    date_to: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[ReconciliationRunStatus] = mapped_column(Enum(ReconciliationRunStatus), default=ReconciliationRunStatus.PENDING)
+    total_orders_checked: Mapped[int] = mapped_column(Integer, default=0)
+    total_orders_matched: Mapped[int] = mapped_column(Integer, default=0)
+    total_discrepancies_found: Mapped[int] = mapped_column(Integer, default=0)
+    total_discrepancies_resolved: Mapped[int] = mapped_column(Integer, default=0)
+    total_amount_checked: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal("0.0000"))
+    total_variance: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal("0.0000"))
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    triggered_by: Mapped[str] = mapped_column(String(50), default="system")
+    config_snapshot: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    discrepancies = relationship("Discrepancy", back_populates="reconciliation_run")
+    ledger_entries = relationship("FinancialLedger", back_populates="reconciliation_run")
+    platform_connection = relationship("PlatformConnection")
+
+
+class Discrepancy(Base):
+    __tablename__ = "discrepancies"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    merchant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("merchants.id"), nullable=False, index=True)
+    reconciliation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("reconciliation_runs.id"), nullable=False, index=True)
+    discrepancy_type: Mapped[DiscrepancyType] = mapped_column(Enum(DiscrepancyType), nullable=False)
+    status: Mapped[DiscrepancyStatus] = mapped_column(Enum(DiscrepancyStatus), default=DiscrepancyStatus.OPEN)
+    severity: Mapped[str] = mapped_column(String(20), default="medium")
+    order_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True)
+    platform_order_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    platform_connection_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("platform_connections.id"), nullable=True)
+    payout_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("payouts.id"), nullable=True)
+    expected_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 4), nullable=True)
+    actual_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 4), nullable=True)
+    variance: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 4), nullable=True)
+    currency: Mapped[str] = mapped_column(String(3), default="BHD")
+    expected_value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    actual_value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    resolution_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    resolved_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    reconciliation_run = relationship("ReconciliationRun", back_populates="discrepancies")
+    order = relationship("Order")
+    platform_connection = relationship("PlatformConnection")
+    payout = relationship("Payout")
+
+
+class Payout(Base):
+    __tablename__ = "payouts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    merchant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("merchants.id"), nullable=False, index=True)
+    platform_connection_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("platform_connections.id"), nullable=False, index=True)
+    platform_payout_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    platform_period_start: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    platform_period_end: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[PayoutStatus] = mapped_column(Enum(PayoutStatus), default=PayoutStatus.EXPECTED)
+    currency: Mapped[str] = mapped_column(String(3), default="BHD", nullable=False)
+    gross_sales: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal("0.0000"))
+    total_fees: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal("0.0000"))
+    total_refunds: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal("0.0000"))
+    total_adjustments: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal("0.0000"))
+    net_payout: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    breakdown: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    bank_reference: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    bank_account_last4: Mapped[Optional[str]] = mapped_column(String(4), nullable=True)
+    expected_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    sent_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    received_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    platform_connection = relationship("PlatformConnection", back_populates="payouts")
+    ledger_entries = relationship("FinancialLedger", back_populates="payout")
+    discrepancies = relationship("Discrepancy", back_populates="payout")
+
+
+class SettlementReport(Base):
+    __tablename__ = "settlement_reports"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    merchant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("merchants.id"), nullable=False, index=True)
+    report_type: Mapped[ReportType] = mapped_column(Enum(ReportType), default=ReportType.DAILY)
+    period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    platform_connection_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("platform_connections.id"), nullable=True)
+    total_orders: Mapped[int] = mapped_column(Integer, default=0)
+    total_sales: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal("0.0000"))
+    total_fees: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal("0.0000"))
+    total_refunds: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal("0.0000"))
+    total_payouts: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal("0.0000"))
+    net_revenue: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal("0.0000"))
+    platform_breakdown: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    payment_method_breakdown: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    file_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    file_format: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    is_final: Mapped[bool] = mapped_column(Boolean, default=False)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)

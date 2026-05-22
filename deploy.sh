@@ -1,106 +1,136 @@
 #!/bin/bash
-set -e
+# ═══════════════════════════════════════════════════════════════
+# QR Menu SaaS — Hostinger VPS Deploy Script
+# Server: 76.13.61.252 (Ubuntu 24.04)
+# Run as root or with sudo
+# ═══════════════════════════════════════════════════════════════
 
-echo "========================================="
-echo "  QRMenu SaaS - Production Deploy"
-echo "  Server: 76.13.61.252"
-echo "========================================="
+set -e  # Exit on error
 
-# 1. Update system
-echo "[1/8] Updating system packages..."
-sudo apt-get update -y
-sudo apt-get upgrade -y
+echo "🚀 Starting QR Menu SaaS deployment..."
 
-# 2. Install Docker if not present
-echo "[2/8] Installing Docker..."
+# ─── 1. CHECK REQUIREMENTS ───────────────────────────────────
+echo "📋 Checking requirements..."
+
 if ! command -v docker &> /dev/null; then
+    echo "❌ Docker not found. Installing..."
     curl -fsSL https://get.docker.com | sh
-    sudo usermod -aG docker $USER
-    echo "Docker installed. Please log out and back in, then re-run this script."
-    exit 0
+    systemctl enable docker
+    systemctl start docker
+    usermod -aG docker root
 fi
 
-# 3. Install Docker Compose
-echo "[3/8] Installing Docker Compose..."
 if ! command -v docker-compose &> /dev/null; then
-    sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    sudo chmod +x /usr/local/bin/docker-compose
+    echo "❌ Docker Compose not found. Installing..."
+    curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    chmod +x /usr/local/bin/docker-compose
 fi
 
-# 4. Create app directory
-echo "[4/8] Setting up application directory..."
-mkdir -p ~/qrmenu-saas
-cd ~/qrmenu-saas
+# ─── 2. CREATE DIRECTORIES ──────────────────────────────────
+echo "📁 Creating directories..."
+mkdir -p /var/www/qrmenu
+mkdir -p /var/www/qrmenu/static
+mkdir -p /var/www/qrmenu/backups
+mkdir -p /var/www/qrmenu/nginx
 
-# 5. Clone repo (if not exists)
-echo "[5/8] Cloning repository..."
-if [ ! -d ".git" ]; then
-    git clone https://github.com/noelsilveira/qrmenu-saas.git .
-else
-    git pull origin main
-fi
+# ─── 3. COPY FILES ──────────────────────────────────────────
+echo "📦 Copying application files..."
+# NOTE: Run this script from your project root where docker-compose.prod.yml exists
+cp docker-compose.prod.yml /var/www/qrmenu/
+cp -r static/* /var/www/qrmenu/static/ 2>/dev/null || echo "⚠️ No static files to copy"
+cp nginx/qrmenu.conf /var/www/qrmenu/nginx/
 
-# 6. Create .env file
-echo "[6/8] Creating environment file..."
-if [ ! -f ".env" ]; then
-    cat > .env << 'ENVFILE'
-# APP
-APP_NAME=QRMenu SaaS
-APP_VERSION=2.0.0
-SECRET_KEY=CHANGE_THIS_TO_64_CHAR_RANDOM_STRING
-
-# DATABASE
-DB_PASSWORD=CHANGE_THIS_DB_PASSWORD
-
-# REDIS (internal Docker network)
-REDIS_URI=redis://redis:6379/0
-REDIS_CELERY_URI=redis://redis:6379/1
-
-# WHATSAPP (fill when ready)
-META_WA_ACCESS_TOKEN=
-META_WA_PHONE_NUMBER_ID=
-META_WA_BUSINESS_ACCOUNT_ID=
-META_WA_WEBHOOK_VERIFY_TOKEN=
-
-# PAYMENTS (fill when ready)
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
-
-# STORAGE (fill when ready)
-S3_ENDPOINT=https://s3.amazonaws.com
-S3_BUCKET=qrmenu-assets
-S3_ACCESS_KEY=
-S3_SECRET_KEY=
-
-# CORS
-CORS_ORIGINS=["*"]
-ENVFILE
-    echo "WARNING: .env file created. PLEASE EDIT IT and set SECRET_KEY and DB_PASSWORD!"
-    echo "   nano ~/qrmenu-saas/.env"
+# ─── 4. SETUP ENVIRONMENT ───────────────────────────────────
+echo "🔧 Setting up environment..."
+if [ ! -f /var/www/qrmenu/.env ]; then
+    echo "⚠️ .env file not found. Creating from example..."
+    cp .env.example /var/www/qrmenu/.env
+    echo "❌ PLEASE EDIT /var/www/qrmenu/.env with your actual values before continuing!"
     exit 1
 fi
 
-# 7. Build and start services
-echo "[7/8] Building and starting services..."
+# Generate SECRET_KEY if not set
+if grep -q "CHANGE_THIS_TO_64_CHAR_RANDOM_STRING" /var/www/qrmenu/.env; then
+    NEW_SECRET=$(openssl rand -hex 32)
+    sed -i "s/CHANGE_THIS_TO_64_CHAR_RANDOM_STRING/$NEW_SECRET/g" /var/www/qrmenu/.env
+    echo "✅ Generated SECRET_KEY"
+fi
+
+# Generate DB_PASSWORD if not set
+if grep -q "CHANGE_THIS_TO_STRONG_PASSWORD" /var/www/qrmenu/.env; then
+    NEW_DB_PASS=$(openssl rand -base64 24)
+    sed -i "s/CHANGE_THIS_TO_STRONG_PASSWORD/$NEW_DB_PASS/g" /var/www/qrmenu/.env
+    echo "✅ Generated DB_PASSWORD"
+fi
+
+# ─── 5. BUILD & START ───────────────────────────────────────
+echo "🏗️ Building and starting containers..."
+cd /var/www/qrmenu
+
 docker-compose -f docker-compose.prod.yml down 2>/dev/null || true
+docker-compose -f docker-compose.prod.yml pull
 docker-compose -f docker-compose.prod.yml up -d --build
 
-# 8. Run migrations
-echo "[8/8] Running database migrations..."
-sleep 10
-docker-compose -f docker-compose.prod.yml exec -T api alembic upgrade head
+# ─── 6. RUN MIGRATIONS ────────────────────────────────────
+echo "🗄️ Running database migrations..."
+sleep 5  # Wait for DB to be ready
+docker-compose -f docker-compose.prod.yml exec -T qrmenu-api alembic upgrade head
+
+# ─── 7. INSTALL NGINX ──────────────────────────────────────
+echo "🌐 Setting up Nginx..."
+if ! command -v nginx &> /dev/null; then
+    apt-get update
+    apt-get install -y nginx
+fi
+
+# Copy config
+cp /var/www/qrmenu/nginx/qrmenu.conf /etc/nginx/sites-available/qrmenu
+
+# Replace domain placeholder
+DOMAIN=$(grep "^DOMAIN=" /var/www/qrmenu/.env | cut -d '=' -f2)
+sed -i "s/YOUR_DOMAIN_HERE/$DOMAIN/g" /etc/nginx/sites-available/qrmenu
+
+# Enable site
+ln -sf /etc/nginx/sites-available/qrmenu /etc/nginx/sites-enabled/
+rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
+
+# Test and reload
+nginx -t && systemctl reload nginx
+
+# ─── 8. SSL CERTIFICATE ─────────────────────────────────────
+echo "🔒 Setting up SSL..."
+if ! command -v certbot &> /dev/null; then
+    apt-get install -y certbot python3-certbot-nginx
+fi
+
+certbot --nginx -d $DOMAIN --non-interactive --agree-tos --email admin@$DOMAIN || true
+
+# ─── 9. VERIFY DEPLOYMENT ─────────────────────────────────
+echo "✅ Verifying deployment..."
+sleep 3
 
 echo ""
-echo "========================================="
-echo "  DEPLOYMENT COMPLETE!"
-echo "========================================="
+echo "📊 Container Status:"
+docker-compose -f docker-compose.prod.yml ps
+
 echo ""
-echo "API Health Check:"
-echo "  curl http://76.13.61.252/health"
+echo "🔍 Health Check:"
+curl -s http://127.0.0.1:9000/api/v1/health | head -c 200 || echo "❌ Health check failed"
+
 echo ""
-echo "API Docs:"
-echo "  http://76.13.61.252/api/v1/docs"
+echo "🎉 DEPLOYMENT COMPLETE!"
 echo ""
-echo "To view logs:"
-echo "  docker-compose -f docker-compose.prod.yml logs -f api"
+echo "📱 Frontend URLs:"
+echo "   https://$DOMAIN          → Customer PWA"
+echo "   https://$DOMAIN/portal   → Merchant Portal"
+echo "   https://$DOMAIN/kds      → KDS Display"
+echo "   https://$DOMAIN/driver   → Driver App"
+echo ""
+echo "🔌 API Base URL:"
+echo "   https://$DOMAIN/api/v1/"
+echo ""
+echo "📋 Useful Commands:"
+echo "   docker-compose -f /var/www/qrmenu/docker-compose.prod.yml logs -f"
+echo "   docker-compose -f /var/www/qrmenu/docker-compose.prod.yml ps"
+echo "   docker-compose -f /var/www/qrmenu/docker-compose.prod.yml restart qrmenu-api"
 echo ""

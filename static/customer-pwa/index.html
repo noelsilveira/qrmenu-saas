@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a1a2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>OrderNow - QR Menu</title>
+<link rel="manifest" href="/static/customer-pwa/manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary: #e94560; --primary-dark: #c73e54; --secondary: #0f3460;
+  --dark: #1a1a2e; --darker: #16213e; --light: #f5f5f5;
+  --success: #00d9a3; --warning: #ffc107; --danger: #ff4757;
+  --text: #333; --text-light: #888; --border: #e0e0e0;
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif;-webkit-tap-highlight-color:transparent}
+body{background:var(--light);color:var(--text);overflow-x:hidden}
+.app{max-width:480px;margin:0 auto;min-height:100vh;position:relative}
+
+/* Header */
+.header{background:linear-gradient(135deg,var(--dark),var(--secondary));color:#fff;padding:16px 20px;position:sticky;top:0;z-index:100}
+.header-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.logo{font-size:22px;font-weight:700;letter-spacing:-0.5px}
+.cart-btn{position:relative;background:rgba(255,255,255,0.15);border:none;width:44px;height:44px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.cart-btn svg{width:22px;height:22px;fill:#fff}
+.cart-count{position:absolute;top:-4px;right:-4px;background:var(--primary);color:#fff;font-size:11px;font-weight:600;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.restaurant-info h2{font-size:18px;font-weight:600;margin-bottom:2px}
+.restaurant-info p{font-size:13px;opacity:0.8}
+
+/* Search & Filter */
+.search-bar{padding:12px 20px;background:#fff;border-bottom:1px solid var(--border)}
+.search-input{width:100%;padding:12px 16px;border:1px solid var(--border);border-radius:12px;font-size:15px;outline:none;transition:all .2s}
+.search-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(233,69,96,0.1)}
+.category-scroll{display:flex;gap:8px;padding:12px 20px;overflow-x:auto;background:#fff;border-bottom:1px solid var(--border);scrollbar-width:none}
+.category-scroll::-webkit-scrollbar{display:none}
+.category-chip{flex-shrink:0;padding:8px 16px;border-radius:20px;background:#f0f0f0;border:none;font-size:13px;font-weight:500;cursor:pointer;transition:all .2s;white-space:nowrap}
+.category-chip.active{background:var(--primary);color:#fff}
+
+/* Menu Items */
+.menu-section{padding:16px 20px}
+.section-title{font-size:18px;font-weight:600;margin-bottom:12px;color:var(--dark)}
+.item-card{background:#fff;border-radius:16px;margin-bottom:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);display:flex;transition:transform .2s}
+.item-card:active{transform:scale(0.98)}
+.item-image{width:100px;height:100px;object-fit:cover;flex-shrink:0}
+.item-content{padding:12px;flex:1;display:flex;flex-direction:column;justify-content:space-between}
+.item-name{font-size:15px;font-weight:600;margin-bottom:4px;color:var(--dark)}
+.item-desc{font-size:12px;color:var(--text-light);line-height:1.4;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.item-bottom{display:flex;justify-content:space-between;align-items:center}
+.item-price{font-size:17px;font-weight:700;color:var(--primary)}
+.add-btn{background:var(--primary);color:#fff;border:none;width:36px;height:36px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.add-btn:active{background:var(--primary-dark);transform:scale(0.9)}
+
+/* Item Detail Modal */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;display:none;align-items:flex-end;justify-content:center}
+.modal.active{display:flex}
+.modal-content{background:#fff;width:100%;max-width:480px;border-radius:24px 24px 0 0;max-height:85vh;overflow-y:auto;animation:slideUp .3s ease}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.modal-image{width:100%;height:220px;object-fit:cover;border-radius:24px 24px 0 0}
+.modal-body{padding:20px}
+.modal-name{font-size:22px;font-weight:700;margin-bottom:8px}
+.modal-desc{font-size:14px;color:var(--text-light);line-height:1.5;margin-bottom:16px}
+.modifiers{margin-bottom:20px}
+.modifier-group{margin-bottom:16px}
+.modifier-title{font-size:14px;font-weight:600;margin-bottom:8px;color:var(--dark)}
+.modifier-option{display:flex;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:6px;cursor:pointer;transition:all .2s}
+.modifier-option.selected{border-color:var(--primary);background:rgba(233,69,96,0.05)}
+.modifier-option input{margin-right:10px;width:18px;height:18px;accent-color:var(--primary)}
+.modifier-price{margin-left:auto;font-size:13px;color:var(--text-light)}
+.quantity-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.quantity-label{font-size:16px;font-weight:600}
+.quantity-control{display:flex;align-items:center;gap:12px}
+.qty-btn{width:40px;height:40px;border-radius:50%;border:1px solid var(--border);background:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.qty-value{font-size:18px;font-weight:600;width:30px;text-align:center}
+.add-to-cart-btn{width:100%;padding:16px;background:var(--primary);color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:600;cursor:pointer;transition:all .2s}
+.add-to-cart-btn:active{background:var(--primary-dark)}
+
+/* Cart */
+.cart-panel{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:150;display:none}
+.cart-panel.active{display:block}
+.cart-content{position:absolute;bottom:0;left:0;right:0;background:#fff;border-radius:24px 24px 0 0;max-height:70vh;overflow-y:auto;padding:20px;animation:slideUp .3s ease}
+.cart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.cart-title{font-size:20px;font-weight:700}
+.close-cart{background:none;border:none;font-size:24px;cursor:pointer;color:var(--text-light)}
+.cart-item{display:flex;gap:12px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+.cart-item-img{width:60px;height:60px;border-radius:10px;object-fit:cover}
+.cart-item-details{flex:1}
+.cart-item-name{font-size:14px;font-weight:600;margin-bottom:2px}
+.cart-item-modifiers{font-size:11px;color:var(--text-light);margin-bottom:4px}
+.cart-item-price{font-size:14px;font-weight:700;color:var(--primary)}
+.cart-item-qty{display:flex;align-items:center;gap:8px;margin-top:4px}
+.cart-qty-btn{width:28px;height:28px;border-radius:50%;border:1px solid var(--border);background:#fff;font-size:14px;cursor:pointer}
+.cart-footer{margin-top:20px;padding-top:16px;border-top:2px solid var(--border)}
+.cart-total-row{display:flex;justify-content:space-between;margin-bottom:8px;font-size:14px}
+.cart-total-row.total{font-size:18px;font-weight:700;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.checkout-btn{width:100%;padding:16px;background:var(--success);color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:600;cursor:pointer;margin-top:16px}
+
+/* Order Tracking */
+.tracking-view{padding:20px}
+.tracking-header{text-align:center;margin-bottom:24px}
+.tracking-order-num{font-size:14px;color:var(--text-light);margin-bottom:4px}
+.tracking-status{font-size:24px;font-weight:700;color:var(--primary);margin-bottom:8px}
+.status-timeline{position:relative;padding-left:30px;margin-bottom:24px}
+.status-timeline::before{content:'';position:absolute;left:11px;top:0;bottom:0;width:2px;background:var(--border)}
+.timeline-item{position:relative;margin-bottom:20px;padding-left:20px}
+.timeline-item::before{content:'';position:absolute;left:-24px;top:2px;width:20px;height:20px;border-radius:50%;background:var(--border);border:3px solid #fff;box-shadow:0 0 0 2px var(--border)}
+.timeline-item.active::before{background:var(--primary);box-shadow:0 0 0 2px var(--primary)}
+.timeline-item.completed::before{background:var(--success);box-shadow:0 0 0 2px var(--success)}
+.timeline-time{font-size:11px;color:var(--text-light);margin-bottom:2px}
+.timeline-label{font-size:14px;font-weight:600}
+.timeline-desc{font-size:12px;color:var(--text-light);margin-top:2px}
+
+/* Driver Tracking Map */
+.map-container{background:#e8e8e8;border-radius:16px;height:200px;margin-bottom:16px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.map-placeholder{text-align:center;color:var(--text-light)}
+.map-placeholder svg{width:48px;height:48px;margin-bottom:8px;opacity:0.4}
+.driver-info{display:flex;align-items:center;gap:12px;padding:12px;background:#fff;border-radius:12px;margin-bottom:12px}
+.driver-avatar{width:44px;height:44px;border-radius:50%;background:var(--secondary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600}
+.driver-details{flex:1}
+.driver-name{font-size:14px;font-weight:600}
+.driver-vehicle{font-size:12px;color:var(--text-light)}
+.eta-badge{background:var(--success);color:#fff;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600}
+
+/* Bottom Nav */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--border);display:flex;justify-content:space-around;padding:8px 0;z-index:90;max-width:480px;margin:0 auto}
+.nav-item{flex:1;text-align:center;padding:6px;cursor:pointer;border:none;background:none;color:var(--text-light);font-size:11px;transition:all .2s}
+.nav-item svg{width:24px;height:24px;margin-bottom:2px;fill:currentColor}
+.nav-item.active{color:var(--primary)}
+.nav-item.active svg{fill:var(--primary)}
+
+/* Loading */
+.loading-screen{position:fixed;inset:0;background:var(--dark);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:300;color:#fff}
+.loading-screen.hidden{display:none}
+.spinner{width:48px;height:48px;border:3px solid rgba(255,255,255,0.2);border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Toast */
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--dark);color:#fff;padding:12px 24px;border-radius:12px;font-size:14px;z-index:250;opacity:0;transition:all .3s}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Responsive */
+@media(min-width:481px){.app{box-shadow:0 0 40px rgba(0,0,0,0.1)}}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Loading -->
+  <div class="loading-screen" id="loadingScreen">
+    <div class="spinner"></div>
+    <p>Loading menu...</p>
+  </div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-top">
+      <div class="logo">🍽️ OrderNow</div>
+      <button class="cart-btn" onclick="toggleCart()">
+        <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1.003 1.003 0 0 0 20 4H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
+        <span class="cart-count" id="cartCount">0</span>
+      </button>
+    </div>
+    <div class="restaurant-info">
+      <h2>Al Rabeeh Kitchen</h2>
+      <p>📍 Block 338, Road 2513, Manama • ⏱ 25-35 min</p>
+    </div>
+  </header>
+
+  <!-- Search -->
+  <div class="search-bar">
+    <input type="text" class="search-input" placeholder="🔍 Search dishes, cuisines..." id="searchInput" oninput="filterItems()">
+  </div>
+
+  <!-- Categories -->
+  <div class="category-scroll" id="categoryScroll">
+    <button class="category-chip active" data-cat="all" onclick="filterCategory('all')">All</button>
+    <button class="category-chip" data-cat="starters" onclick="filterCategory('starters')">Starters</button>
+    <button class="category-chip" data-cat="mains" onclick="filterCategory('mains')">Mains</button>
+    <button class="category-chip" data-cat="grill" onclick="filterCategory('grill')">Grill</button>
+    <button class="category-chip" data-cat="salads" onclick="filterCategory('salads')">Salads</button>
+    <button class="category-chip" data-cat="desserts" onclick="filterCategory('desserts')">Desserts</button>
+    <button class="category-chip" data-cat="drinks" onclick="filterCategory('drinks')">Drinks</button>
+  </div>
+
+  <!-- Menu -->
+  <div class="menu-section" id="menuSection">
+    <div class="section-title">🔥 Popular Now</div>
+    <div id="menuItems"></div>
+  </div>
+
+  <!-- Item Modal -->
+  <div class="modal" id="itemModal">
+    <div class="modal-content">
+      <img class="modal-image" id="modalImage" src="" alt="">
+      <div class="modal-body">
+        <div class="modal-name" id="modalName"></div>
+        <div class="modal-desc" id="modalDesc"></div>
+        <div class="modifiers" id="modalModifiers"></div>
+        <div class="quantity-row">
+          <span class="quantity-label">Quantity</span>
+          <div class="quantity-control">
+            <button class="qty-btn" onclick="changeQty(-1)">−</button>
+            <span class="qty-value" id="modalQty">1</span>
+            <button class="qty-btn" onclick="changeQty(1)">+</button>
+          </div>
+        </div>
+        <button class="add-to-cart-btn" onclick="addToCartFromModal()">
+          Add to Cart — <span id="modalTotalPrice">0.000</span> BHD
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cart Panel -->
+  <div class="cart-panel" id="cartPanel" onclick="if(event.target===this)toggleCart()">
+    <div class="cart-content">
+      <div class="cart-header">
+        <span class="cart-title">🛒 Your Cart</span>
+        <button class="close-cart" onclick="toggleCart()">✕</button>
+      </div>
+      <div id="cartItems"></div>
+      <div class="cart-footer">
+        <div class="cart-total-row"><span>Subtotal</span><span id="cartSubtotal">0.000 BHD</span></div>
+        <div class="cart-total-row"><span>Tax (5%)</span><span id="cartTax">0.000 BHD</span></div>
+        <div class="cart-total-row"><span>Delivery</span><span>1.500 BHD</span></div>
+        <div class="cart-total-row total"><span>Total</span><span id="cartTotal">0.000 BHD</span></div>
+        <button class="checkout-btn" onclick="checkout()">Place Order</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Order Tracking View -->
+  <div class="tracking-view" id="trackingView" style="display:none">
+    <div class="tracking-header">
+      <div class="tracking-order-num">Order #ORD-2026-001</div>
+      <div class="tracking-status" id="trackStatus">Preparing your order</div>
+      <p style="font-size:13px;color:var(--text-light)">Estimated ready: 12:45 PM</p>
+    </div>
+    <div class="status-timeline" id="statusTimeline"></div>
+    <div class="map-container">
+      <div class="map-placeholder">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        <div>Live map tracking</div>
+        <small>Driver location updates in real-time</small>
+      </div>
+    </div>
+    <div class="driver-info" id="driverInfo" style="display:none">
+      <div class="driver-avatar">A</div>
+      <div class="driver-details">
+        <div class="driver-name">Ali Driver</div>
+        <div class="driver-vehicle">🛵 Motorcycle • +973 3333 4444</div>
+      </div>
+      <span class="eta-badge">ETA 8 min</span>
+    </div>
+  </div>
+
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" onclick="showView('menu')">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+      <div>Menu</div>
+    </button>
+    <button class="nav-item" onclick="showView('orders')">
+      <svg viewBox="0 0 24 24"><path d="M13 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V9l-7-7zm0 18H6V4h7v16zm7-9h-6v2h6v-2zm0 4h-6v2h6v-2z"/></svg>
+      <div>Orders</div>
+    </button>
+    <button class="nav-item" onclick="showView('track')">
+      <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+      <div>Track</div>
+    </button>
+  </nav>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+// Mock Data
+const menuItems = [
+  {id:1,name:"Grilled Chicken Burger",desc:"Juicy grilled chicken breast with lettuce, tomato, and our signature sauce",price:3.500,category:"mains",image:"https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400",modifiers:[{name:"Extra Cheese",price:0.300},{name:"Bacon Strip",price:0.500},{name:"Spicy Sauce",price:0.000}]},
+  {id:2,name:"Shawarma Platter",desc:"Traditional Arabic shawarma with garlic sauce, pickles, and fries",price:4.200,category:"mains",image:"https://images.unsplash.com/photo-1541544744-375cfed75400?w=400",modifiers:[{name:"Extra Garlic Sauce",price:0.200},{name:"Add Bread",price:0.300}]},
+  {id:3,name:"Caesar Salad",desc:"Fresh romaine lettuce, parmesan, croutons with Caesar dressing",price:2.800,category:"salads",image:"https://images.unsplash.com/photo-1546793665-c74683f339c1?w=400",modifiers:[{name:"Grilled Chicken",price:1.500},{name:"Extra Dressing",price:0.200}]},
+  {id:4,name:"Mixed Grill",desc:"Lamb chops, chicken tikka, and kefta served with rice and grilled vegetables",price:8.500,category:"grill",image:"https://images.unsplash.com/photo-1544025162-d76694265947?w=400",modifiers:[{name:"Spicy",price:0.000},{name:"Extra Rice",price:0.800}]},
+  {id:5,name:"Hummus & Pita",desc:"Creamy hummus topped with olive oil, served with warm pita bread",price:1.800,category:"starters",image:"https://images.unsplash.com/photo-1637949385162-e416fb15b2ce?w=400",modifiers:[{name:"Extra Pita",price:0.300},{name:"Falafel Side",price:1.000}]},
+  {id:6,name:"Kunafa",desc:"Traditional Palestinian dessert with cheese and sweet syrup",price:2.500,category:"desserts",image:"https://images.unsplash.com/photo-1519676867240-f03562e64548?w=400",modifiers:[{name:"Extra Syrup",price:0.200},{name:"Ice Cream",price:0.800}]},
+  {id:7,name:"Fresh Orange Juice",desc:"100% freshly squeezed orange juice",price:1.500,category:"drinks",image:"https://images.unsplash.com/photo-1613478223719-2f7c6aee0e98?w=400",modifiers:[{name:"Large Size",price:0.500}]},
+  {id:8,name:"Falafel Wrap",desc:"Crispy falafel with tahini, salad, and pickles in warm flatbread",price:2.200,category:"mains",image:"https://images.unsplash.com/photo-1541529086526-db283c563270?w=400",modifiers:[{name:"Extra Tahini",price:0.200},{name:"Spicy",price:0.000}]}
+];
+
+let cart = [];
+let currentItem = null;
+let modalQty = 1;
+let selectedModifiers = [];
+
+// Init
+setTimeout(() => {
+  document.getElementById('loadingScreen').classList.add('hidden');
+  renderMenu();
+}, 800);
+
+function renderMenu(items = menuItems) {
+  const container = document.getElementById('menuItems');
+  container.innerHTML = items.map(item => `
+    <div class="item-card" onclick="openModal(${item.id})">
+      <img class="item-image" src="${item.image}" alt="${item.name}" loading="lazy">
+      <div class="item-content">
+        <div>
+          <div class="item-name">${item.name}</div>
+          <div class="item-desc">${item.desc}</div>
+        </div>
+        <div class="item-bottom">
+          <span class="item-price">${item.price.toFixed(3)} BHD</span>
+          <button class="add-btn" onclick="event.stopPropagation();quickAdd(${item.id})">+</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function filterCategory(cat) {
+  document.querySelectorAll('.category-chip').forEach(c => c.classList.toggle('active', c.dataset.cat === cat));
+  renderMenu(cat === 'all' ? menuItems : menuItems.filter(i => i.category === cat));
+}
+
+function filterItems() {
+  const query = document.getElementById('searchInput').value.toLowerCase();
+  renderMenu(menuItems.filter(i => i.name.toLowerCase().includes(query) || i.desc.toLowerCase().includes(query)));
+}
+
+function openModal(id) {
+  currentItem = menuItems.find(i => i.id === id);
+  modalQty = 1;
+  selectedModifiers = [];
+  document.getElementById('modalImage').src = currentItem.image;
+  document.getElementById('modalName').textContent = currentItem.name;
+  document.getElementById('modalDesc').textContent = currentItem.desc;
+  document.getElementById('modalQty').textContent = '1';
+  updateModalPrice();
+
+  const modContainer = document.getElementById('modalModifiers');
+  modContainer.innerHTML = currentItem.modifiers.length ? `
+    <div class="modifier-group">
+      <div class="modifier-title">Add-ons</div>
+      ${currentItem.modifiers.map((m, idx) => `
+        <div class="modifier-option" onclick="toggleModifier(${idx}, this)">
+          <input type="checkbox" onchange="event.stopPropagation()">
+          <span>${m.name}</span>
+          <span class="modifier-price">+${m.price.toFixed(3)} BHD</span>
+        </div>
+      `).join('')}
+    </div>
+  ` : '';
+
+  document.getElementById('itemModal').classList.add('active');
+}
+
+function toggleModifier(idx, el) {
+  el.classList.toggle('selected');
+  el.querySelector('input').checked = el.classList.contains('selected');
+  if (selectedModifiers.includes(idx)) selectedModifiers = selectedModifiers.filter(i => i !== idx);
+  else selectedModifiers.push(idx);
+  updateModalPrice();
+}
+
+function changeQty(delta) {
+  modalQty = Math.max(1, modalQty + delta);
+  document.getElementById('modalQty').textContent = modalQty;
+  updateModalPrice();
+}
+
+function updateModalPrice() {
+  let total = currentItem.price * modalQty;
+  selectedModifiers.forEach(idx => total += currentItem.modifiers[idx].price * modalQty);
+  document.getElementById('modalTotalPrice').textContent = total.toFixed(3);
+}
+
+function addToCartFromModal() {
+  const modifiers = selectedModifiers.map(idx => currentItem.modifiers[idx]);
+  cart.push({...currentItem, qty: modalQty, modifiers, cartId: Date.now()});
+  updateCartUI();
+  document.getElementById('itemModal').classList.remove('active');
+  showToast(`Added ${currentItem.name} to cart`);
+}
+
+function quickAdd(id) {
+  const item = menuItems.find(i => i.id === id);
+  const existing = cart.find(c => c.id === id && c.modifiers.length === 0);
+  if (existing) existing.qty++;
+  else cart.push({...item, qty: 1, modifiers: [], cartId: Date.now()});
+  updateCartUI();
+  showToast(`Added ${item.name}`);
+}
+
+function updateCartUI() {
+  const count = cart.reduce((sum, c) => sum + c.qty, 0);
+  document.getElementById('cartCount').textContent = count;
+  document.getElementById('cartCount').style.display = count ? 'flex' : 'none';
+
+  const container = document.getElementById('cartItems');
+  container.innerHTML = cart.map(item => `
+    <div class="cart-item">
+      <img class="cart-item-img" src="${item.image}" alt="">
+      <div class="cart-item-details">
+        <div class="cart-item-name">${item.name}</div>
+        ${item.modifiers.length ? `<div class="cart-item-modifiers">${item.modifiers.map(m => m.name).join(', ')}</div>` : ''}
+        <div class="cart-item-price">${((item.price + item.modifiers.reduce((s,m)=>s+m.price,0)) * item.qty).toFixed(3)} BHD</div>
+        <div class="cart-item-qty">
+          <button class="cart-qty-btn" onclick="updateCartQty(${item.cartId}, -1)">−</button>
+          <span>${item.qty}</span>
+          <button class="cart-qty-btn" onclick="updateCartQty(${item.cartId}, 1)">+</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  const subtotal = cart.reduce((sum, c) => sum + (c.price + c.modifiers.reduce((s,m)=>s+m.price,0)) * c.qty, 0);
+  const tax = subtotal * 0.05;
+  const delivery = cart.length > 0 ? 1.5 : 0;
+  const total = subtotal + tax + delivery;
+
+  document.getElementById('cartSubtotal').textContent = subtotal.toFixed(3) + ' BHD';
+  document.getElementById('cartTax').textContent = tax.toFixed(3) + ' BHD';
+  document.getElementById('cartTotal').textContent = total.toFixed(3) + ' BHD';
+}
+
+function updateCartQty(cartId, delta) {
+  const item = cart.find(c => c.cartId === cartId);
+  if (item) {
+    item.qty += delta;
+    if (item.qty <= 0) cart = cart.filter(c => c.cartId !== cartId);
+    updateCartUI();
+  }
+}
+
+function toggleCart() {
+  document.getElementById('cartPanel').classList.toggle('active');
+}
+
+function checkout() {
+  if (cart.length === 0) return showToast('Your cart is empty');
+  toggleCart();
+  showToast('Order placed successfully!');
+  cart = [];
+  updateCartUI();
+  showView('track');
+  startTracking();
+}
+
+function showView(view) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelector(`.nav-item:nth-child(${view === 'menu' ? 1 : view === 'orders' ? 2 : 3})`).classList.add('active');
+
+  document.getElementById('menuSection').style.display = view === 'menu' ? 'block' : 'none';
+  document.querySelector('.search-bar').style.display = view === 'menu' ? 'block' : 'none';
+  document.querySelector('.category-scroll').style.display = view === 'menu' ? 'flex' : 'none';
+  document.getElementById('trackingView').style.display = view === 'track' ? 'block' : 'none';
+
+  if (view === 'track') startTracking();
+}
+
+function startTracking() {
+  const timeline = document.getElementById('statusTimeline');
+  const statuses = [
+    {label:'Order Received',desc:'Your order has been received',time:'12:15 PM',completed:true},
+    {label:'Preparing',desc:'Kitchen is preparing your food',time:'12:18 PM',completed:true,active:true},
+    {label:'Ready for Pickup',desc:'Food is ready for driver',time:'12:35 PM (est)',completed:false},
+    {label:'Out for Delivery',desc:'Driver is on the way',time:'12:40 PM (est)',completed:false},
+    {label:'Delivered',desc:'Enjoy your meal!',time:'12:50 PM (est)',completed:false}
+  ];
+
+  timeline.innerHTML = statuses.map(s => `
+    <div class="timeline-item ${s.active ? 'active' : ''} ${s.completed ? 'completed' : ''}">
+      <div class="timeline-time">${s.time}</div>
+      <div class="timeline-label">${s.label}</div>
+      <div class="timeline-desc">${s.desc}</div>
+    </div>
+  `).join('');
+
+  document.getElementById('driverInfo').style.display = 'none';
+
+  // Simulate driver assignment after 3 seconds
+  setTimeout(() => {
+    document.getElementById('driverInfo').style.display = 'flex';
+    showToast('Driver Ali has been assigned!');
+  }, 3000);
+}
+
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+// Close modal on outside click
+document.getElementById('itemModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('itemModal')) document.getElementById('itemModal').classList.remove('active');
+});
+</script>
+</body>
+</html>

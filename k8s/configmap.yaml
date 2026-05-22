@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: qrmenu-config
+  namespace: qrmenu
+data:
+  ENVIRONMENT: "production"
+  ALGORITHM: "HS256"
+  ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+  LOG_LEVEL: "INFO"
+  CELERY_BROKER_URL: "redis://redis:6379/1"
+  CELERY_RESULT_BACKEND: "redis://redis:6379/2"
+  WEBSOCKET_MAX_CONNECTIONS: "10000"
+  RECONCILIATION_AUTO_RUN: "true"
+  RECONCILIATION_SCHEDULE: "0 2 * * *"

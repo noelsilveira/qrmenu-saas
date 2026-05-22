@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0f3460">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Driver App — Al Rabeeh</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--primary:#e94560;--secondary:#0f3460;--dark:#1a1a2e;--light:#f5f5f5;--success:#00d9a3;--warning:#ffc107;--danger:#ff4757;--text:#333;--text-light:#888;--border:#e0e0e0}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif;-webkit-tap-highlight-color:transparent}
+body{background:var(--light);color:var(--text);overflow-x:hidden}
+.app{max-width:480px;margin:0 auto;min-height:100vh;position:relative;background:#fff}
+
+/* Header */
+.header{background:linear-gradient(135deg,var(--secondary),var(--dark));color:#fff;padding:16px 20px;position:sticky;top:0;z-index:100}
+.header-top{display:flex;justify-content:space-between;align-items:center}
+.brand{font-size:18px;font-weight:700}
+.status-badge{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;background:rgba(255,255,255,0.2)}
+.status-online{background:var(--success);color:#fff}
+.driver-info{display:flex;align-items:center;gap:12px;margin-top:12px}
+.driver-avatar{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700}
+.driver-details{flex:1}
+.driver-name{font-size:15px;font-weight:600}
+.driver-stats{font-size:12px;opacity:0.8}
+
+/* Stats Row */
+.stats-row{display:flex;gap:12px;padding:16px 20px;background:#fff;border-bottom:1px solid var(--border)}
+.stat-box{flex:1;background:var(--light);border-radius:12px;padding:12px;text-align:center}
+.stat-num{font-size:22px;font-weight:700;color:var(--secondary)}
+.stat-label{font-size:11px;color:var(--text-light);margin-top:2px}
+
+/* Tab Nav */
+.tab-nav{display:flex;border-bottom:1px solid var(--border);background:#fff}
+.tab-btn{flex:1;padding:14px;border:none;background:none;font-size:14px;font-weight:500;color:var(--text-light);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s}
+.tab-btn.active{color:var(--primary);border-bottom-color:var(--primary)}
+
+/* Order Cards */
+.orders-list{padding:16px 20px}
+.order-card{background:#fff;border-radius:16px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.04)}
+.order-header{padding:16px 20px;background:linear-gradient(135deg,var(--light),#fff);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.order-id{font-size:16px;font-weight:700;color:var(--dark)}
+.order-time{font-size:12px;color:var(--text-light)}
+.order-body{padding:16px 20px}
+.address-row{display:flex;gap:12px;margin-bottom:16px}
+.address-icon{width:40px;height:40px;border-radius:50%;background:var(--light);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.address-details{flex:1}
+.address-label{font-size:11px;color:var(--text-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px}
+.address-text{font-size:14px;font-weight:500;line-height:1.4}
+.order-items{font-size:13px;color:var(--text-light);margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+.order-total{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.total-label{font-size:14px;color:var(--text-light)}
+.total-value{font-size:20px;font-weight:700;color:var(--primary)}
+
+/* Action Buttons */
+.action-btns{display:flex;gap:8px}
+.action-btn{flex:1;padding:14px;border-radius:12px;border:none;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:6px}
+.action-btn:active{transform:scale(0.97)}
+.btn-accept{background:var(--success);color:#fff}
+.btn-pickup{background:var(--secondary);color:#fff}
+.btn-deliver{background:var(--primary);color:#fff}
+.btn-navigate{background:var(--light);color:var(--text);border:1px solid var(--border)}
+.btn-call{background:var(--light);color:var(--text);border:1px solid var(--border)}
+
+/* Map Placeholder */
+.map-container{height:200px;background:linear-gradient(135deg,#e3f2fd,#bbdefb);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.map-dot{width:16px;height:16px;background:var(--primary);border-radius:50%;position:relative}
+.map-dot::after{content:'';position:absolute;inset:-8px;border:2px solid var(--primary);border-radius:50%;animation:ripple 2s infinite}
+@keyframes ripple{0%{transform:scale(1);opacity:1}100%{transform:scale(2);opacity:0}}
+.map-route{position:absolute;height:3px;background:var(--primary);opacity:0.3;border-radius:2px}
+
+/* Earnings */
+.earnings-card{background:linear-gradient(135deg,var(--secondary),var(--dark));color:#fff;border-radius:16px;padding:20px;margin:16px 20px}
+.earnings-title{font-size:14px;opacity:0.8;margin-bottom:8px}
+.earnings-amount{font-size:36px;font-weight:700}
+.earnings-period{font-size:12px;opacity:0.6;margin-top:4px}
+
+/* Profile */
+.profile-section{padding:20px}
+.profile-item{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid var(--border)}
+.profile-label{font-size:14px;color:var(--text-light)}
+.profile-value{font-size:14px;font-weight:600}
+
+/* Bottom Safe Area */
+.safe-area{height:20px}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Header -->
+  <header class="header">
+    <div class="header-top">
+      <div class="brand">🛵 Driver App</div>
+      <span class="status-badge status-online">● Online</span>
+    </div>
+    <div class="driver-info">
+      <div class="driver-avatar">A</div>
+      <div class="driver-details">
+        <div class="driver-name">Ali Hassan</div>
+        <div class="driver-stats">⭐ 4.9 • 1,247 deliveries</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-box">
+      <div class="stat-num" id="todayDeliveries">8</div>
+      <div class="stat-label">Today</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num" id="todayEarnings">42.50</div>
+      <div class="stat-label">BHD Earned</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num" id="avgTime">18</div>
+      <div class="stat-label">Avg Min</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-nav">
+    <button class="tab-btn active" onclick="showTab('active')">Active</button>
+    <button class="tab-btn" onclick="showTab('history')">History</button>
+    <button class="tab-btn" onclick="showTab('earnings')">Earnings</button>
+  </div>
+
+  <!-- Active Orders -->
+  <div class="orders-list" id="activeTab">
+    <!-- Order 1: Assigned -->
+    <div class="order-card" id="order-089">
+      <div class="order-header">
+        <span class="order-id">#ORD-089</span>
+        <span class="order-time">Assigned 2 min ago</span>
+      </div>
+      <div class="map-container">
+        <div class="map-route" style="width:60%;top:50%;left:20%;transform:rotate(-15deg)"></div>
+        <div class="map-dot"></div>
+      </div>
+      <div class="order-body">
+        <div class="address-row">
+          <div class="address-icon">🏪</div>
+          <div class="address-details">
+            <div class="address-label">Pickup</div>
+            <div class="address-text">Al Rabeeh Kitchen<br><small>Block 338, Road 2513, Manama</small></div>
+          </div>
+        </div>
+        <div class="address-row">
+          <div class="address-icon">🏠</div>
+          <div class="address-details">
+            <div class="address-label">Delivery</div>
+            <div class="address-text">Ahmed Hassan<br><small>Building 45, Flat 12, Block 245, Riffa</small></div>
+          </div>
+        </div>
+        <div class="order-items">2× Grilled Chicken Burger, 1× Fresh Orange Juice</div>
+        <div class="order-total">
+          <span class="total-label">Order Total</span>
+          <span class="total-value">28.500 BHD</span>
+        </div>
+        <div class="action-btns">
+          <button class="action-btn btn-navigate" onclick="navigate()">🗺 Navigate</button>
+          <button class="action-btn btn-call" onclick="callCustomer()">📞 Call</button>
+        </div>
+        <div class="action-btns" style="margin-top:8px">
+          <button class="action-btn btn-pickup" onclick="confirmPickup('089')">✓ Picked Up</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- History Tab -->
+  <div class="orders-list" id="historyTab" style="display:none">
+    <div class="order-card">
+      <div class="order-header">
+        <span class="order-id">#ORD-086</span>
+        <span class="order-time" style="color:var(--success)">✓ Delivered</span>
+      </div>
+      <div class="order-body">
+        <div class="address-row">
+          <div class="address-icon">🏠</div>
+          <div class="address-details">
+            <div class="address-label">Delivered to</div>
+            <div class="address-text">Fatima K.<br><small>Building 12, Flat 5, Juffair</small></div>
+          </div>
+        </div>
+        <div class="order-items">3× Falafel Wrap</div>
+        <div class="order-total">
+          <span class="total-label">Earnings</span>
+          <span class="total-value" style="color:var(--success)">+1.500 BHD</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-light)">Delivered at 12:35 PM • 22 min</div>
+      </div>
+    </div>
+    <div class="order-card">
+      <div class="order-header">
+        <span class="order-id">#ORD-082</span>
+        <span class="order-time" style="color:var(--success)">✓ Delivered</span>
+      </div>
+      <div class="order-body">
+        <div class="address-row">
+          <div class="address-icon">🏠</div>
+          <div class="address-details">
+            <div class="address-label">Delivered to</div>
+            <div class="address-text">Omar J.<br><small>Villa 8, Road 2819, Saar</small></div>
+          </div>
+        </div>
+        <div class="order-items">1× Mixed Grill, 2× Caesar Salad</div>
+        <div class="order-total">
+          <span class="total-label">Earnings</span>
+          <span class="total-value" style="color:var(--success)">+2.000 BHD</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-light)">Delivered at 11:48 AM • 18 min</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Earnings Tab -->
+  <div id="earningsTab" style="display:none">
+    <div class="earnings-card">
+      <div class="earnings-title">Today's Earnings</div>
+      <div class="earnings-amount">42.500 <span style="font-size:18px">BHD</span></div>
+      <div class="earnings-period">8 deliveries • Avg 5.31 BHD per delivery</div>
+    </div>
+    <div class="profile-section">
+      <div class="profile-item">
+        <span class="profile-label">This Week</span>
+        <span class="profile-value">312.000 BHD</span>
+      </div>
+      <div class="profile-item">
+        <span class="profile-label">This Month</span>
+        <span class="profile-value">1,247.500 BHD</span>
+      </div>
+      <div class="profile-item">
+        <span class="profile-label">Total Deliveries</span>
+        <span class="profile-value">1,247</span>
+      </div>
+      <div class="profile-item">
+        <span class="profile-label">On-Time Rate</span>
+        <span class="profile-value" style="color:var(--success)">94.2%</span>
+      </div>
+      <div class="profile-item">
+        <span class="profile-label">Customer Rating</span>
+        <span class="profile-value">⭐ 4.9 / 5.0</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="safe-area"></div>
+</div>
+
+<script>
+let currentOrder = '089';
+let ws = null;
+
+function showTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+
+  document.getElementById('activeTab').style.display = tab === 'active' ? 'block' : 'none';
+  document.getElementById('historyTab').style.display = tab === 'history' ? 'block' : 'none';
+  document.getElementById('earningsTab').style.display = tab === 'earnings' ? 'block' : 'none';
+}
+
+function confirmPickup(orderId) {
+  const card = document.getElementById('order-' + orderId);
+  if (card) {
+    card.querySelector('.order-time').textContent = 'Picked up';
+    card.querySelector('.btn-pickup').textContent = '✓ Delivered';
+    card.querySelector('.btn-pickup').className = 'action-btn btn-deliver';
+    card.querySelector('.btn-pickup').onclick = () => confirmDelivery(orderId);
+
+    // Update stats
+    const deliveries = parseInt(document.getElementById('todayDeliveries').textContent);
+    document.getElementById('todayDeliveries').textContent = deliveries + 1;
+
+    // Send WS message
+    sendWsMessage({
+      type: 'driver:pickup',
+      payload: { driver_id: 'DRIVER_UUID', order_id: orderId, picked_up_at: new Date().toISOString() }
+    });
+  }
+}
+
+function confirmDelivery(orderId) {
+  const card = document.getElementById('order-' + orderId);
+  if (card) {
+    card.style.opacity = '0.5';
+    setTimeout(() => card.remove(), 500);
+
+    // Update earnings
+    const earnings = parseFloat(document.getElementById('todayEarnings').textContent);
+    document.getElementById('todayEarnings').textContent = (earnings + 1.5).toFixed(2);
+
+    // Send WS message
+    sendWsMessage({
+      type: 'driver:delivered',
+      payload: { driver_id: 'DRIVER_UUID', order_id: orderId, delivered_at: new Date().toISOString() }
+    });
+
+    alert('Order delivered! +1.500 BHD');
+  }
+}
+
+function navigate() {
+  // Open Google Maps with directions
+  window.open('https://maps.google.com/?daddr=26.2285,50.5860', '_blank');
+}
+
+function callCustomer() {
+  window.location.href = 'tel:+97333334444';
+}
+
+function sendWsMessage(msg) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(msg));
+  }
+}
+
+function connectWebSocket() {
+  // Replace with actual WebSocket URL
+  // ws = new WebSocket('ws://localhost:8000/api/v1/ws/driver/MERCHANT_ID?driver_id=DRIVER_ID');
+  // ws.onopen = () => {
+  //   ws.send(JSON.stringify({
+  //     type: 'auth',
+  //     payload: { token: 'JWT_TOKEN', client_type: 'driver' }
+  //   }));
+  // };
+  // ws.onmessage = (event) => {
+  //   const msg = JSON.parse(event.data);
+  //   if (msg.type === 'driver:assign') {
+  //     // New order assigned
+  //     alert('New order assigned!');
+  //   }
+  // };
+
+  // Send location every 15 seconds
+  setInterval(() => {
+    sendWsMessage({
+      type: 'driver:location',
+      payload: {
+        driver_id: 'DRIVER_UUID',
+        location: {
+          lat: 26.2285 + (Math.random() - 0.5) * 0.01,
+          lng: 50.5860 + (Math.random() - 0.5) * 0.01,
+          timestamp: new Date().toISOString()
+        },
+        status: 'en_route_delivery',
+        battery_level: 85
+      }
+    });
+  }, 15000);
+}
+
+// GPS tracking
+function startGPSTracking() {
+  if ('geolocation' in navigator) {
+    navigator.geolocation.watchPosition(
+      (position) => {
+        sendWsMessage({
+          type: 'driver:location',
+          payload: {
+            driver_id: 'DRIVER_UUID',
+            location: {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+              heading: position.coords.heading,
+              speed: position.coords.speed,
+              timestamp: new Date().toISOString()
+            },
+            status: 'en_route_delivery'
+          }
+        });
+      },
+      (err) => console.error('GPS error:', err),
+      { enableHighAccuracy: true, maximumAge: 10000 }
+    );
+  }
+}
+
+// Init
+connectWebSocket();
+startGPSTracking();
+</script>
+</body>
+</html>
