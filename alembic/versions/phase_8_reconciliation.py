@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers
 revision = 'phase_8_reconciliation'
-down_revision = 'bf2809408e7c'
+down_revision = 'add_platform_connections'
 dependencies = []
 
 
