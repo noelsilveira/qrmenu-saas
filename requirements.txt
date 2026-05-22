@@ -3,7 +3,7 @@ uvicorn[standard]==0.30.0
 python-socketio[asyncio_client]==5.11.0
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-sqlalchemy[asyncio]==2.0.30
+sqlalchemy[asyncio]==2.0.36
 asyncpg==0.31.0
 alembic==1.13.1
 redis==5.0.4
