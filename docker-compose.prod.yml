@@ -121,7 +121,7 @@ services:
       - qrmenu-redis
     networks:
       - qrmenu-network
-    command: celery -A app.core.celery_app beat --loglevel=warning --scheduler celery.beat:PersistentScheduler
+    command: celery -A app.core.celery_app beat --loglevel=warning --scheduler celery.beat:PersistentScheduler --schedule /app/logs/celerybeat-schedule
     healthcheck:
       test: ["CMD-SHELL", "ps aux | grep -v grep | grep 'celery beat' || exit 1"]
       interval: 30s
