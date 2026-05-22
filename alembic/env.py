@@ -10,9 +10,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.db.base_class import Base
 from app.models import *  # noqa: F401, F403
+from app.core.config import settings
 
 # this is the Alembic Config object
 config = context.config
+
+# Override sqlalchemy.url with sync version of POSTGRES_URI
+# Convert asyncpg URL to psycopg2 URL for alembic
+sync_url = settings.POSTGRES_URI.replace("postgresql+asyncpg://", "postgresql://")
+config.set_main_option("sqlalchemy.url", sync_url)
 
 # Interpret the config file for Python logging
 if config.config_file_name is not None:
